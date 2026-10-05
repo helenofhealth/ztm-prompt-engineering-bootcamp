@@ -4,6 +4,12 @@ A browser-based Snake game built with HTML, CSS, and JavaScript as part of the Z
 
 The project was developed iteratively with AI assistance, with a focus on prompt engineering, feature development, debugging, testing, and understanding the reasoning behind code changes.
 
+## Live Demo
+
+**[Play the Snake Game](https://helenofhealth.github.io/ztm-prompt-engineering-bootcamp/snake-game/)**
+
+The game is deployed with GitHub Pages and runs directly in the browser.
+
 ## Demo
 
 Open `src/index.html` in a modern web browser to run the game locally.
