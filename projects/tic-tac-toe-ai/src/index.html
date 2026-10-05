@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic-Tac-Toe AI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <main class="game-container">
+        <h1>Tic-Tac-Toe AI</h1>
+
+        <p class="instructions">
+            You are X. The AI is O.
+        </p>
+
+        <div class="scoreboard">
+            <div>
+                You
+                <strong id="playerScore">0</strong>
+            </div>
+
+            <div>
+                Draws
+                <strong id="drawScore">0</strong>
+            </div>
+
+            <div>
+                AI
+                <strong id="aiScore">0</strong>
+            </div>
+        </div>
+
+        <p id="status" class="status">
+            Your turn
+        </p>
+
+        <div id="board" class="board">
+            <button class="cell" data-index="0"></button>
+            <button class="cell" data-index="1"></button>
+            <button class="cell" data-index="2"></button>
+            <button class="cell" data-index="3"></button>
+            <button class="cell" data-index="4"></button>
+            <button class="cell" data-index="5"></button>
+            <button class="cell" data-index="6"></button>
+            <button class="cell" data-index="7"></button>
+            <button class="cell" data-index="8"></button>
+        </div>
+
+        <div id="gameMessage" class="game-message hidden">
+            <p id="messageText"></p>
+        </div>
+
+        <button id="resetButton" class="reset-button">
+            New Game
+        </button>
+    </main>
+
+    <script src="game.js"></script>
+</body>
+</html>
