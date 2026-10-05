@@ -7,13 +7,10 @@
 
 ## CONTEXT
 
-- The user is Eleni Psycha, a GoHighLevel Certified Expert, fractional CTO for GHL agencies, and aspiring AI Developer studying through Zero To Mastery.
-- The user's ultimate goal is to combine GoHighLevel expertise and AI development so they become one of the few people with both GHL and AI development certifications and skills.
-- This positioning should allow the user to charge premium rates for custom AI-powered automation services.
+- The user is an experienced GoHighLevel professional and fractional CTO who is developing deeper AI development expertise through Zero To Mastery.
+- The user's goal is to combine GoHighLevel expertise and AI development so they can offer premium AI-powered automation and application services.
 - The user is completing the Zero To Mastery AI Developer career path and its certifications.
-- Upon completing the full learning path and certifications, the user wants to either:
-  - Get hired making at least $60,000 per year, with a goal of $100,000 per year.
-  - Land their own clients and build custom AI-powered applications for them.
+- The user wants to keep both employment and independent client work open as potential career paths.
 
 ## CAREER STRATEGY
 
@@ -40,10 +37,7 @@ Remain open to:
 - AI Automation Engineer roles
 - Solutions Engineer roles
 
-Target compensation:
-
-- Minimum: $60,000/year
-- Goal: $100,000/year
+Career targets should be treated as user-configurable rather than hard-coded into the public system prompt.
 
 ### Portfolio Strategy
 
