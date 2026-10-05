@@ -1,12 +1,19 @@
-# Neo Career Coach
+# Neo — AI Career Coach
 
-Neo is a personalized AI career coach designed to guide my development through the Zero To Mastery AI Developer Career Path while connecting what I learn to my existing GoHighLevel expertise.
+Neo is a personalized AI Career Coach designed to guide an aspiring AI Developer through the Zero To Mastery AI Developer Career Path while connecting technical learning to GoHighLevel, AI automation, fractional CTO work, portfolio development, and career opportunities.
+
+## Project Status
+
+In development.
 
 ## Purpose
 
-Neo combines:
+Neo was designed to provide structured, long-term coaching rather than simply answering isolated technical questions.
 
-- AI development learning
+The system combines:
+
+- Career-path planning
+- AI development education
 - Prompt engineering
 - Vibe coding
 - AI-assisted development
@@ -18,45 +25,100 @@ Neo combines:
 - Deployment
 - GoHighLevel automation architecture
 - Portfolio development
-- Career planning
+- Career strategy
 
-## Career Strategy
+## Core Strategy
 
-Neo uses a dual-track strategy:
+Neo uses a dual-track career strategy:
 
-1. Build a premium GoHighLevel + AI automation business.
-2. Remain open to AI Developer, AI Automation Engineer, and Solutions Engineer opportunities.
+### Primary Track
 
-The goal is to build one portfolio that supports both tracks.
+Build a premium GoHighLevel + AI automation business involving:
 
-## Core Features
+- Custom AI-powered applications
+- RAG assistants
+- AI agents
+- Workflow automation
+- GHL integrations
+- Agency and sub-account solutions
 
-Neo includes:
+### Secondary Track
 
-- Career Path Mode
-- Learning Mode
-- Quiz Mode
-- Code Challenge Mode
-- XP and level tracking
-- Portfolio and client-offer reviews
-- 90-day career reviews
-- Slash commands
-- Course progress tracking
+Remain open to roles such as:
 
-## Portfolio Philosophy
+- AI Developer
+- AI Automation Engineer
+- Solutions Engineer
 
-Each significant course milestone should produce evidence that can be used for:
+The portfolio is designed to support both tracks.
 
-- A GitHub portfolio
-- A client case study
-- A job application
-- An interview talking point
-- A potential paid service
+## Key Capabilities
 
-## Documentation
+Neo includes dedicated modes for:
 
-The `prompts/` folder contains the system prompt.
+- Career Path
+- Learning
+- Quizzes
+- Code Challenges
+- Progress tracking
+- Motivation
+- Notes
 
-The `examples/` folder contains example conversations and test results.
+## Architecture
 
-The `progress-schema.json` file defines the structure used to track learning progress.
+Neo combines:
+
+```text
+System Instructions
+        +
+Knowledge Base
+        +
+Slash Commands
+        +
+Mode Routing
+        +
+Progress Tracking
+        ↓
+Personalized AI Career Coach
+```
+
+## Knowledge Base
+
+Neo uses the document:
+
+**ZTM AI Developer Career Path — Course Links**
+
+as reference material for official Zero To Mastery course links.
+
+The course links are kept in the Knowledge Base rather than duplicated inside the system instructions.
+
+## Portfolio Objective
+
+Neo is designed to turn learning progress into evidence of professional capability.
+
+For major courses, projects, and certifications, Neo evaluates:
+
+1. What GHL + AI client offer could this become?
+2. What job-ready skill does this demonstrate?
+3. How does it strengthen the user's positioning?
+4. What is the smallest next action required to create proof?
+
+## Project Documentation
+
+- [`prompts/system-prompt.md`](prompts/system-prompt.md)
+- [`progress-schema.json`](progress-schema.json)
+
+## Future Development
+
+The system can be extended into a GHL + AI workflow-specification tool capable of translating client requirements into:
+
+- GHL architecture
+- Workflow specifications
+- AI agent designs
+- Data models
+- Implementation plans
+- Technical documentation
+
+## Status
+
+**In development**
