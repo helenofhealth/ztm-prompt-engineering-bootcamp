@@ -4,6 +4,12 @@ An AI-powered Tic-Tac-Toe game built with HTML, CSS, and JavaScript as part of t
 
 The project demonstrates AI-assisted development, game-state management, algorithmic decision-making, testing, and debugging.
 
+## Live Demo
+
+**[Play Tic-Tac-Toe AI](https://helenofhealth.github.io/ztm-prompt-engineering-bootcamp/)**
+
+The live version is deployed with GitHub Pages from the project's `src/` directory.
+
 ## Screenshot
 
 ![Tic-Tac-Toe AI Screenshot](assets/screenshot.png)
@@ -236,4 +242,4 @@ These are transferable skills for AI development, AI automation, and future GoHi
 
 ## Status
 
-**Completed and tested locally.**
+**Completed, tested locally, and configured for GitHub Pages deployment.**
