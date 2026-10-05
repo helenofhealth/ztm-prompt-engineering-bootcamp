@@ -1,4 +1,4 @@
-name: Deploy Tic-Tac-Toe AI to GitHub Pages
+name: Deploy Games to GitHub Pages
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'projects/tic-tac-toe-ai/src/**'
+      - 'projects/snake-game/src/**'
       - '.github/workflows/tic-tac-toe-pages.yml'
   workflow_dispatch:
 
@@ -32,6 +33,8 @@ jobs:
         run: |
           mkdir -p _site
           cp -R projects/tic-tac-toe-ai/src/. _site/
+          mkdir -p _site/snake-game
+          cp -R projects/snake-game/src/. _site/snake-game/
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
