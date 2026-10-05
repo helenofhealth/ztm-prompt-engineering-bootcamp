@@ -65,7 +65,8 @@ snake-game/
 │   ├── style.css
 │   └── game.js
 ├── assets/
-│   └── screenshot.png
+│   ├── snake-game-1.png
+│   └── snake-game-2.png
 └── prompts/
     └── build-prompts.md
 ```
