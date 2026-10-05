@@ -10,7 +10,8 @@ Open `src/index.html` in a modern web browser to run the game locally.
 
 ## Screenshot
 
-![Snake Game Screenshot](assets/screenshot.png)
+![Snake Game Screenshot](assets/snake-game-1.png)
+![Snake Game Screenshot](assets/snake-game-2.png)
 
 ## Features
 
