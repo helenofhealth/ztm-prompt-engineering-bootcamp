@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 
 type Scene = "gate" | "blood-door" | "well" | "armory" | "contract" | "combat" | "victory";
+type ScenarioId = "lost-heir" | "plague-below" | "dragon-hoard";
+type Scenario = { id: ScenarioId; title: string; tagline: string; intro: string; quote: string; gateChoices: [string, string, string, string] };
 type LogEntry = { text: string; kind?: "roll" | "danger" | "good" };
 type PartyMember = { name: string; role: string; hp: number; maxHp: number; detail: string; icon: string };
 
 type SaveState = {
-  scene: Scene; hp: number; maxHp: number; gold: number; xp: number; potions: number;
+  scenarioId: ScenarioId; scene: Scene; hp: number; maxHp: number; gold: number; xp: number; potions: number;
   inventory: string[]; log: LogEntry[]; explored: string[]; enemyHp: number; enemyMaxHp: number;
   round: number; lastRoll: number | null;
 };
@@ -16,8 +18,13 @@ const initialParty: PartyMember[] = [
   { name: "Mira Voss", role: "Human Mage", hp: 18, maxHp: 18, detail: "Arcane investigator", icon: "🔮" },
 ];
 const starterInventory = ["Ancestral longsword", "Reinforced armor", "Shield", "5 torches", "50 ft rope", "Flint & steel", "3 days of rations", "Signet of the First King"];
+const scenarios: Record<ScenarioId, Scenario> = {
+  "lost-heir": { id: "lost-heir", title: "The Lost Heir", tagline: "What was buried was never forgotten.", intro: "Rain hammers the ruined fortress above you. The black-iron gate opens at the touch of your signet. Beyond it, ankle-deep black water surrounds four faceless statues and a bronze pedestal.", quote: "“The heir may claim the throne, but the throne claims the heir.”", gateChoices: ["Inspect the royal contract", "Approach the blood-sealed door", "Investigate the whispering well", "Search the forgotten armory"] },
+  "plague-below": { id: "plague-below", title: "The Plague Below", tagline: "Some things should stay buried.", intro: "You descend into a quarantined mining city where green spores drift through the air. The evacuation bells have stopped, but something beneath the streets is still ringing them. Your party's masks are already frosting over.", quote: "“If you can hear the bells, the infection can hear you.”", gateChoices: ["Inspect the quarantine ledger", "Open the sealed infirmary", "Investigate the spore well", "Search the abandoned supply vault"] },
+  "dragon-hoard": { id: "dragon-hoard", title: "The Dragon's Hoard", tagline: "Every treasure has a price.", intro: "A split mountain opens into a cavern of black glass and molten gold. Coins rain from the ceiling like sparks. Somewhere beyond the bridge, a sleeping dragon breathes—and every exhale makes the stone beneath your boots tremble.", quote: "“Take one coin, and the mountain takes one name.”", gateChoices: ["Read the runic bargain", "Approach the obsidian door", "Investigate the wishing pool", "Search the fallen treasure vault"] }
+};
 const initialState: SaveState = {
-  scene: "gate", hp: 24, maxHp: 24, gold: 25, xp: 0, potions: 2,
+  scenarioId: "lost-heir", scene: "gate", hp: 24, maxHp: 24, gold: 25, xp: 0, potions: 2,
   inventory: starterInventory, log: [
     { text: "Campaign started: Eleni, the Lost Heir. Your signet has awakened.", kind: "good" },
     { text: "Brom, Lyra, and Mira join your expedition." },
@@ -35,11 +42,28 @@ export default function App() {
     } catch { return initialState; }
   });
   const [party, setParty] = useState(initialParty);
+  const [showScenarioPicker, setShowScenarioPicker] = useState(false);
   const [tab, setTab] = useState<"journal" | "inventory">("journal");
 
   useEffect(() => {
     localStorage.setItem("dungeon-crawl-save-v1", JSON.stringify(game));
   }, [game]);
+
+  const activeScenario = scenarios[game.scenarioId];
+  const startScenario = (id: ScenarioId) => {
+    const selected = scenarios[id];
+    const next: SaveState = {
+      ...initialState, scenarioId: id, scene: "gate",
+      inventory: id === "lost-heir" ? [...starterInventory] : starterInventory.filter(item => item !== "Signet of the First King").concat(id === "plague-below" ? ["Sealed respirator"] : ["Dragon-glass compass"]),
+      log: [
+        { text: "New campaign started: " + selected.title + ".", kind: "good" },
+        { text: id === "lost-heir" ? "Your signet has awakened. Brom, Lyra, and Mira join your expedition." : id === "plague-below" ? "Brom, Lyra, and Mira join your expedition. Keep your masks sealed." : "Brom, Lyra, and Mira join your expedition. The dragon has not stirred—yet." },
+        { text: selected.quote, kind: "danger" }
+      ],
+      explored: [], enemyHp: 22, enemyMaxHp: 22, round: 1, lastRoll: null
+    };
+    setGame(next); setParty(initialParty); setTab("journal"); setShowScenarioPicker(false);
+  };
 
   const addLog = (entries: LogEntry[]) => setGame(g => ({ ...g, log: [...g.log, ...entries].slice(-40) }));
   const check = (label: string, bonus = 0, dc = 12) => {
@@ -90,22 +114,23 @@ export default function App() {
 
   const sceneContent = useMemo(() => {
     switch (game.scene) {
-      case "gate": return { eyebrow: "CHAPTER I · THE GATE THAT BREATHES", title: "The Heir Has Come Home", art: "gate", body: "Rain hammers the ruined fortress above you. The black-iron gate opens at the touch of your signet. Beyond it, ankle-deep black water surrounds four faceless statues and a bronze pedestal.", quote: "“The heir may claim the throne, but the throne claims the heir.”" };
-      case "blood-door": return { eyebrow: "LOCATION · THE BLOOD-SEALED DOOR", title: "Someone Knows Your Name", art: "blood", body: "A crimson seal throbs on an iron door. Something pounds against the other side. Between each impact, a voice cries: “Your Majesty! Please, you must let me out!”", quote: "Brom whispers: “I've seen this crest on a tomb door. From the inside.”" };
-      case "well": return { eyebrow: "LOCATION · THE WHISPERING WELL", title: "A Voice from Below", art: "well", body: "Cold blue light shimmers over a circular well. From its depths, your own voice repeats a sentence you have never spoken: “Do not trust Brom.”", quote: "Brom refuses to meet your eyes. Mira says the magic is old enough to have a memory." };
-      case "armory": return { eyebrow: "LOCATION · THE FORGOTTEN ARMORY", title: "Steel Remembers", art: "armory", body: "Weapons hang in rows beneath a collapsed arch. A golden light flickers behind a fallen statue, and somewhere in the dark, a blade is being sharpened.", quote: "Lyra spots fresh tracks. Whatever is here has been waiting." };
-      case "contract": return { eyebrow: "DISCOVERY · THE ROYAL CONTRACT", title: "The Throne's Price", art: "contract", body: "The inscription is not a warning but a contract. Your signet fits a hollow in the pedestal. Ancient letters rearrange themselves around your hand.", quote: "“Blood grants entry. Memory grants passage. A name grants the crown.”" };
-      case "combat": return { eyebrow: `ENCOUNTER · ROUND ${game.round}`, title: "Crownbound Sentinel", art: "combat", body: "A suit of royal armor pulls itself upright. Green fire burns inside its empty visor. Its sword points at your heart.", quote: "“UNRECOGNIZED HEIR. SUBMIT FOR JUDGMENT.”" };
-      case "victory": return { eyebrow: "ENCOUNTER COMPLETE", title: "The Sentinel Falls", art: "victory", body: "The ancient armor collapses. Beneath the ash, a silver key gleams beside a fragment of a royal banner. Your signet cools for the first time since you entered.", quote: "Somewhere deeper in the dungeon, a second gate begins to open." };
+      case "gate": return { eyebrow: "CHAPTER I · " + activeScenario.title.toUpperCase(), title: activeScenario.title, art: "gate", body: activeScenario.intro, quote: activeScenario.quote };
+      case "blood-door": return game.scenarioId === "plague-below" ? { eyebrow: "LOCATION · THE SEALED INFIRMARY", title: "Quarantine Is Not Enough", art: "blood", body: "A red quarantine seal covers the infirmary door. Something pounds from inside. A voice calls for help, then dissolves into a wet, inhuman clicking.", quote: "Mira whispers: “If the seal breaks, do not breathe the air.”" } : game.scenarioId === "dragon-hoard" ? { eyebrow: "LOCATION · THE OBSIDIAN DOOR", title: "A Bargain in the Dark", art: "blood", body: "An obsidian door glows with molten seams. A voice offers treasure in exchange for one small memory.", quote: "Brom grips his hammer: “Dragons don't bargain unless they already have the upper hand.”" } : { eyebrow: "LOCATION · THE BLOOD-SEALED DOOR", title: "Someone Knows Your Name", art: "blood", body: "A crimson seal throbs on an iron door. Something pounds against the other side. A voice cries: “Your Majesty! Please, you must let me out!”", quote: "Brom whispers: “I've seen this crest on a tomb door. From the inside.”" };
+      case "well": return game.scenarioId === "plague-below" ? { eyebrow: "LOCATION · THE SPORE WELL", title: "The Infection Listens", art: "well", body: "A shaft descends into blue-green spores. The cloud rises and falls like a sleeping lung. From below, a voice repeats your last words a heartbeat after you speak.", quote: "Lyra finds boot prints leading into the shaft—but none returning." } : game.scenarioId === "dragon-hoard" ? { eyebrow: "LOCATION · THE WISHING POOL", title: "Gold Beneath the Water", art: "well", body: "A still pool reflects a sky that cannot exist underground. Gold coins hover beneath the surface. Your reflection smiles a moment before you do.", quote: "Mira warns: “Wish-magic always collects its debt.”" } : { eyebrow: "LOCATION · THE WHISPERING WELL", title: "A Voice from Below", art: "well", body: "Cold blue light shimmers over a circular well. Your own voice repeats: “Do not trust Brom.”", quote: "Brom refuses to meet your eyes. Mira says the magic is old enough to have a memory." };
+      case "armory": return game.scenarioId === "plague-below" ? { eyebrow: "LOCATION · THE SUPPLY VAULT", title: "The Last Clean Supplies", art: "armory", body: "Shelves of sealed medicine and ration tins line the vault. One cabinet has been clawed open from the inside. Something scrapes behind the emergency supplies.", quote: "Brom raises his shield: “Take what we need. We don't linger.”" } : game.scenarioId === "dragon-hoard" ? { eyebrow: "LOCATION · THE FALLEN TREASURE VAULT", title: "A Mountain of Temptation", art: "armory", body: "Coins and broken crowns glitter beneath a fallen stone arch. A golden light pulses inside a cracked coffer, while claw marks score the walls.", quote: "Lyra spots tracks far too large to belong to a wolf." } : { eyebrow: "LOCATION · THE FORGOTTEN ARMORY", title: "Steel Remembers", art: "armory", body: "Weapons hang in rows beneath a collapsed arch. A golden light flickers behind a fallen statue, and somewhere in the dark, a blade is being sharpened.", quote: "Lyra spots fresh tracks. Whatever is here has been waiting." };
+      case "contract": return game.scenarioId === "plague-below" ? { eyebrow: "DISCOVERY · THE QUARANTINE LEDGER", title: "Patient Zero", art: "contract", body: "The ledger records a quarantine that began twenty years ago. Every name is crossed out except one: the name of the city's founder.", quote: "“Containment failed at 03:17. Do not open the lower doors.”" } : game.scenarioId === "dragon-hoard" ? { eyebrow: "DISCOVERY · THE RUNIC BARGAIN", title: "The Hoard's Contract", art: "contract", body: "A runic bargain is etched into dragon glass. Its terms shimmer: treasure for memory, power for a name.", quote: "“All debts are remembered beneath the mountain.”" } : { eyebrow: "DISCOVERY · THE ROYAL CONTRACT", title: "The Throne's Price", art: "contract", body: "The inscription is not a warning but a contract. Your signet fits a hollow in the pedestal. Ancient letters rearrange themselves around your hand.", quote: "“Blood grants entry. Memory grants passage. A name grants the crown.”" };
+      case "combat": return game.scenarioId === "plague-below" ? { eyebrow: "ENCOUNTER · ROUND " + game.round, title: "Spore-Twisted Warden", art: "combat", body: "A quarantine warden staggers out of the mist, armor split by pale fungal growth. Spores spill from its visor as it raises a rusted blade.", quote: "“INFECTION DETECTED. PURGE INITIATED.”" } : game.scenarioId === "dragon-hoard" ? { eyebrow: "ENCOUNTER · ROUND " + game.round, title: "Hoardbound Guardian", art: "combat", body: "A dragon-forged guardian unfolds from a pile of coins. Molten light shines through its scales of black glass.", quote: "“THIEF. YOUR NAME WILL JOIN THE HOARD.”" } : { eyebrow: "ENCOUNTER · ROUND " + game.round, title: "Crownbound Sentinel", art: "combat", body: "A suit of royal armor pulls itself upright. Green fire burns inside its empty visor. Its sword points at your heart.", quote: "“UNRECOGNIZED HEIR. SUBMIT FOR JUDGMENT.”" };
+      case "victory": return game.scenarioId === "plague-below" ? { eyebrow: "ENCOUNTER COMPLETE", title: "The Warden Falls", art: "victory", body: "The infected warden collapses. A sealed sample case and a brass access key remain in the debris.", quote: "Somewhere below, the quarantine bells begin to ring again." } : game.scenarioId === "dragon-hoard" ? { eyebrow: "ENCOUNTER COMPLETE", title: "The Guardian Shatters", art: "victory", body: "The guardian breaks apart into black glass and gold. A dragon-scale key gleams among the coins.", quote: "Far above, something vast shifts in its sleep." } : { eyebrow: "ENCOUNTER COMPLETE", title: "The Sentinel Falls", art: "victory", body: "The ancient armor collapses. Beneath the ash, a silver key gleams beside a fragment of a royal banner. Your signet cools for the first time since you entered.", quote: "Somewhere deeper in the dungeon, a second gate begins to open." };
     }
-  }, [game.scene, game.round]);
+  }, [game.scene, game.round, game.scenarioId, activeScenario]);
 
-  const reset = () => { setGame({ ...initialState, log: [...initialState.log] }); setParty(initialParty); };
+  const reset = () => setShowScenarioPicker(true);
   const alive = game.hp > 0;
 
   return (
     <div className="app-shell">
-      <header className="topbar"><a className="brand" href="#top"><span className="brand-mark">✦</span><span>DUNGEON<span className="brand-muted">CRAWL</span><small> A LOST HEIR CAMPAIGN</small></span></a><div className="top-actions"><span className="online-dot"/> <span className="prototype-label">SINGLE-PLAYER PROTOTYPE</span><button className="ghost-button" onClick={reset} title="Start a new campaign">↻ <span>New game</span></button></div></header>
+      {showScenarioPicker && <div className="scenario-overlay" role="dialog" aria-modal="true" aria-labelledby="scenario-title"><div className="scenario-modal"><div className="section-kicker">START A NEW CAMPAIGN</div><h2 id="scenario-title">Choose your adventure</h2><p className="scenario-lead">Pick a world to explore. Starting a new campaign resets the current run; your other browser data remains untouched.</p><div className="scenario-grid">{(Object.values(scenarios) as Scenario[]).map(s => <button key={s.id} className={"scenario-card " + s.id} onClick={() => startScenario(s.id)}><span className="scenario-symbol">{s.id === "lost-heir" ? "♛" : s.id === "plague-below" ? "☣" : "🐉"}</span><strong>{s.title}</strong><small>{s.tagline}</small><span className="scenario-start">START ADVENTURE ↗</span></button>)}</div><button className="secondary-button scenario-cancel" onClick={() => setShowScenarioPicker(false)}>Return to current campaign</button></div></div>}
+      <header className="topbar"><a className="brand" href="#top"><span className="brand-mark">✦</span><span>DUNGEON<span className="brand-muted">CRAWL</span><small> {activeScenario.title.toUpperCase()} CAMPAIGN</small></span></a><div className="top-actions"><span className="online-dot"/> <span className="prototype-label">SINGLE-PLAYER PROTOTYPE</span><button className="ghost-button" onClick={reset} title="Start a new campaign">↻ <span>New game</span></button></div></header>
       <main className="layout">
         <aside className="sidebar">
           <div className="section-kicker">YOUR HERO</div>
@@ -118,14 +143,14 @@ export default function App() {
           <div className="party-note">AI companions are simulated in this prototype. Networked player turns are planned for Phase 2.</div>
         </aside>
         <section className="main-column">
-          <div className={`scene-art ${sceneContent.art}`}><div className="art-grain"/><div className="scene-badge"><span/> {sceneContent.eyebrow}</div><div className="art-title"><span>THE CHRONICLES OF</span><h1>THE LOST HEIR</h1><p>What was buried was never forgotten.</p></div><div className="art-rune">ᚷ</div></div>
+          <div className={`scene-art ${sceneContent.art}`}><div className="art-grain"/><div className="scene-badge"><span/> {sceneContent.eyebrow}</div><div className="art-title"><span>THE CHRONICLES OF</span><h1>{activeScenario.title.toUpperCase()}</h1><p>{activeScenario.tagline}</p></div><div className="art-rune">ᚷ</div></div>
           <article className="story-panel"><div className="chapter-label"><span>✦</span> {sceneContent.eyebrow}</div><h2>{sceneContent.title}</h2><p>{sceneContent.body}</p><blockquote>{sceneContent.quote}</blockquote>
             {game.scene === "combat" ? <div className="combat-panel"><div className="enemy-heading"><span>☠</span><div><strong>Crownbound Sentinel</strong><small>Undead construct · AC 12</small></div><b>{game.enemyHp} / {game.enemyMaxHp} HP</b></div><div className="meter enemy-meter"><span style={{ width: `${game.enemyHp / game.enemyMaxHp * 100}%` }}/></div><div className="combat-actions"><button className="primary-button" onClick={attack} disabled={!alive || game.enemyHp <= 0}>⚔ Attack with longsword</button><button className="secondary-button" onClick={usePotion} disabled={game.potions <= 0 || game.hp === game.maxHp}>🧪 Drink potion ({game.potions})</button></div>{!alive && <button className="primary-button" onClick={() => { setGame(g => ({ ...g, hp: 12, scene: "gate", enemyHp: g.enemyMaxHp, log: [...g.log, { text: "The party drags you to safety. You recover with 12 HP; the encounter resets.", kind: "good" }] })); }}>Recover and retreat</button>}</div> : null}
             {game.scene === "gate" && <div className="choices"><div className="choices-heading">WHAT WILL YOU DO? <span>CHOOSE YOUR PATH</span></div>
-              {choose("gate","Inspect the royal contract","Study the pedestal and faceless statues before committing.",() => { const success = check("Royal history", 1, 12); setGame(g => ({ ...g, scene: "contract", xp: g.xp + (success ? 10 : 0) })); })}
-              {choose("gate","Approach the blood-sealed door","Answer the voice calling you Majesty.",() => { setGame(g => ({ ...g, scene: "blood-door" })); addLog([{ text: "You approach the blood-sealed door. Something pounds from within.", kind: "danger" }]); })}
-              {choose("gate","Investigate the whispering well","Find the source of the warning about Brom.",() => { setGame(g => ({ ...g, scene: "well" })); addLog([{ text: "The well repeats your voice in the dark.", kind: "danger" }]); })}
-              {choose("gate","Search the forgotten armory","Look for supplies and clues among the abandoned weapons.",() => { setGame(g => ({ ...g, scene: "armory" })); addLog([{ text: "You enter the forgotten armory. Something stirs among the weapons." }]); })}
+              {choose("gate",activeScenario.gateChoices[0],game.scenarioId === "lost-heir" ? "Study the pedestal and faceless statues before committing." : game.scenarioId === "plague-below" ? "Study the quarantine records for clues to the outbreak." : "Study the runes before making a bargain.",() => { const success = check(game.scenarioId === "lost-heir" ? "Royal history" : game.scenarioId === "plague-below" ? "Medical investigation" : "Arcane lore", 1, 12); setGame(g => ({ ...g, scene: "contract", xp: g.xp + (success ? 10 : 0) })); })}
+              {choose("gate",activeScenario.gateChoices[1],game.scenarioId === "lost-heir" ? "Answer the voice calling you Majesty." : game.scenarioId === "plague-below" ? "Investigate the sealed room where the first cases vanished." : "Approach the door that radiates heat.",() => { setGame(g => ({ ...g, scene: "blood-door" })); addLog([{ text: activeScenario.gateChoices[1] + ".", kind: "danger" }]); })}
+              {choose("gate",activeScenario.gateChoices[2],game.scenarioId === "lost-heir" ? "Find the source of the warning about Brom." : game.scenarioId === "plague-below" ? "Trace the source of the strange spores." : "Look into the pool that reflects another sky.",() => { setGame(g => ({ ...g, scene: "well" })); addLog([{ text: activeScenario.gateChoices[2] + ".", kind: "danger" }]); })}
+              {choose("gate",activeScenario.gateChoices[3],game.scenarioId === "lost-heir" ? "Look for supplies and clues among the abandoned weapons." : game.scenarioId === "plague-below" ? "Search for clean supplies and protective gear." : "Search for treasure without waking the dragon.",() => { setGame(g => ({ ...g, scene: "armory" })); addLog([{ text: activeScenario.gateChoices[3] + "." }]); })}
             </div>}
             {game.scene === "contract" && <div className="choices"><div className="choices-heading">THE CONTRACT <span>YOUR BLOODLINE</span></div>
               {choose("contract","Place the signet in the pedestal","Test whether the relic recognizes its heir.",() => { const success = check("Heir's Instinct", 3, 13); setGame(g => ({ ...g, scene: success ? "victory" : "combat", xp: g.xp + (success ? 15 : 0), log: [...g.log, { text: success ? "The signet unlocks a hidden cache: +15 XP and a silver key." : "The pedestal rejects the signet. A sentinel awakens!", kind: success ? "good" : "danger" }] })); if (!success) startCombat(); })}
