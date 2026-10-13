@@ -83,6 +83,15 @@ function heroOriginStory(hero: Hero): string {
   return `${ancestry.story} ${heroClass.story} ${backgroundProfiles[hero.background]}`;
 }
 function HeroAvatar({ hero, large = false }: { hero: Hero; large?: boolean }) {
+  const [portraitFailed, setPortraitFailed] = useState(false);
+  const portraitByClass: Partial<Record<HeroClass, string>> = {
+    Warrior: "/images/characters/warrior-female-human.webp",
+    Rogue: "/images/characters/rogue-female-human.webp",
+    Mage: "/images/characters/mage-female-human.webp",
+    Ranger: "/images/characters/ranger-female-human.webp",
+    Paladin: "/images/characters/paladin-female-human.webp",
+  };
+  const portrait = hero.gender === "female" && hero.ancestry === "Human" ? portraitByClass[hero.className] : undefined;
   const armor: Record<HeroClass, string> = { Warrior: "#9b7651", Ranger: "#55705a", Mage: "#645b91", Rogue: "#54545b", Paladin: "#b49a5d" };
   const skin: Record<HeroAncestry, string> = { Human: "#c99069", Elf: "#e0b58e", Dwarf: "#b97b56", "Half-Orc": "#8d9b69" };
   const hair: Record<HeroGender, string> = { female: "#3c2925", male: "#30231f" };
@@ -91,6 +100,14 @@ function HeroAvatar({ hero, large = false }: { hero: Hero; large?: boolean }) {
   const isOrc = hero.ancestry === "Half-Orc";
   const cape = hero.className === "Mage" ? "#37325c" : hero.className === "Paladin" ? "#6b2926" : hero.className === "Ranger" ? "#293e31" : "#332b27";
   const weapon = hero.className === "Mage" ? "staff" : hero.className === "Ranger" ? "bow" : hero.className === "Rogue" ? "dagger" : "sword";
+  if (portrait && !portraitFailed) {
+    return <img
+      className={large ? "hero-portrait hero-portrait-large" : "hero-portrait"}
+      src={portrait}
+      alt={`${hero.gender} ${hero.ancestry} ${hero.className}`}
+      onError={() => setPortraitFailed(true)}
+    />;
+  }
   return <svg className={large ? "hero-art hero-art-large" : "hero-art"} viewBox="0 0 220 360" role="img" aria-label={`${hero.gender} ${hero.ancestry} ${hero.className} full-body avatar`}>
     <defs><linearGradient id="avatar-metal" x1="0" x2="1"><stop offset="0" stopColor="#655b4c"/><stop offset=".5" stopColor="#d0bd94"/><stop offset="1" stopColor="#51483c"/></linearGradient><linearGradient id="avatar-cloak" x1="0" y1="0" x2="1" y2="1"><stop stopColor={cape}/><stop offset="1" stopColor="#171715"/></linearGradient></defs>
     <ellipse cx="110" cy="337" rx="63" ry="10" fill="#000" opacity=".45"/>
