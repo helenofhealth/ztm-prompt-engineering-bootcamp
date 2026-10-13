@@ -85,7 +85,7 @@ function heroOriginStory(hero: Hero): string {
 function HeroAvatar({ hero, large = false }: { hero: Hero; large?: boolean }) {
   const [portraitFailed, setPortraitFailed] = useState(false);
   const portraitByClass: Partial<Record<HeroClass, string>> = {
-    Warrior: "/images/characters/warrior-female-human.webp",
+    Warrior: "/images/characters/warrior-female-human-full.webp",
     Rogue: "/images/characters/rogue-female-human.webp",
     Mage: "/images/characters/mage-female-human.webp",
     Ranger: "/images/characters/ranger-female-human.webp",
