@@ -225,10 +225,10 @@ export default function App() {
       setGame(g => ({ ...g, scene: "victory", enemyHp: 0, xp: g.xp + 50, gold: g.gold + 15, log: [...g.log, ...entries] }));
       return;
     }
-    const enemyDamage = roll(6) + 1;
+    const enemyDamage = game.hero.difficulty === "Story" ? roll(4) : game.hero.difficulty === "Hard" ? roll(8) + 2 : roll(6) + 1;
     const newHp = Math.max(0, game.hp - enemyDamage);
     entries.push({ text: `The sentinel retaliates for ${enemyDamage} damage.`, kind: "danger" });
-    if (newHp === 0) entries.push({ text: "${game.hero.name} falls unconscious. Use a healing potion or retreat.", kind: "danger" });
+    if (newHp === 0) entries.push({ text: `${game.hero.name} falls unconscious. Use a healing potion or retreat.`, kind: "danger" });
     setGame(g => ({ ...g, enemyHp: afterHit, hp: newHp, round: g.round + 1, log: [...g.log, ...entries] }));
   };
 
