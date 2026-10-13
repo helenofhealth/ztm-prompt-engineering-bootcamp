@@ -47,12 +47,90 @@ const initialState: SaveState = {
 
 const roll = (sides: number) => Math.floor(Math.random() * sides) + 1;
 
+
+const ancestryDetails: Record<HeroAncestry, { trait: string; description: string; bonuses: Partial<Record<"STR" | "DEX" | "CON" | "INT" | "WIS" | "CHA", number>>; story: string }> = {
+  Human: { trait: "Versatile", description: "Adaptable, determined, and quick to earn trust.", bonuses: { STR: 1, DEX: 1, CON: 1, INT: 1, WIS: 1, CHA: 1 }, story: "Raised among shifting borders, you learned that courage matters more than bloodline." },
+  Elf: { trait: "Keen Senses", description: "Ancient instincts, sharp senses, and graceful movement.", bonuses: { DEX: 2, WIS: 1 }, story: "Your people remember the first songs of the old forests, and one of those songs has begun to sound like a warning." },
+  Dwarf: { trait: "Stoneborn", description: "Sturdy, steadfast, and trained to endure hardship.", bonuses: { CON: 2, STR: 1 }, story: "You were raised beneath mountains where every promise is carved in stone and every debt is remembered." },
+  "Half-Orc": { trait: "Relentless", description: "Powerful, resilient, and impossible to intimidate easily.", bonuses: { STR: 2, CON: 1 }, story: "Between two worlds, you learned to turn other people's doubt into a strength they could never understand." },
+};
+const classProfiles: Record<HeroClass, { role: string; strengths: string; story: string }> = {
+  Warrior: { role: "Front-line fighter", strengths: "High durability · reliable melee damage", story: "You have stood in the breach when others fled, and you know a shield can be both a promise and a warning." },
+  Ranger: { role: "Scout and ranged specialist", strengths: "Precision · awareness · survival", story: "You can read a trail like a page of a book, and the tracks leading into this dungeon tell a story no one wants to hear." },
+  Mage: { role: "Arcane spellcaster", strengths: "Intelligence · magical knowledge", story: "You studied the forbidden margins of old spellbooks, searching for a truth that now seems to be searching for you." },
+  Rogue: { role: "Stealth and finesse", strengths: "Agility · cunning · quick strikes", story: "You survived by noticing what others overlooked: a loose stone, a false smile, and the quiet click of a trap being armed." },
+  Paladin: { role: "Holy defender", strengths: "Resilience · conviction · radiant force", story: "You swore an oath when the world was at its darkest. Something in this dungeon knows the words you used." },
+};
+const backgroundProfiles: Record<HeroBackground, string> = {
+  Noble: "Your family name opens doors—and paints a target on your back.",
+  Outlander: "You trust the wilderness more than courts, cities, or easy promises.",
+  Scholar: "You chase forgotten knowledge, even when the truth bites back.",
+  Mercenary: "You have learned to judge a contract by its fine print and its exits.",
+};
+const ancestryOrder: HeroAncestry[] = ["Human", "Elf", "Dwarf", "Half-Orc"];
+const classOrder: HeroClass[] = ["Warrior", "Ranger", "Mage", "Rogue", "Paladin"];
+const statOrder = ["STR", "DEX", "CON", "INT", "WIS", "CHA"] as const;
+function getHeroStats(hero: Hero): [string, string, string][] {
+  return classDetails[hero.className].stats.map(([name, score]) => {
+    const value = Number(score) + (ancestryDetails[hero.ancestry].bonuses[name as keyof typeof ancestryDetails.Human.bonuses] ?? 0);
+    const modifier = Math.floor((value - 10) / 2);
+    return [name, String(value), modifier >= 0 ? `+${modifier}` : String(modifier)];
+  });
+}
+function heroOriginStory(hero: Hero): string {
+  const ancestry = ancestryDetails[hero.ancestry];
+  const heroClass = classProfiles[hero.className];
+  return `${ancestry.story} ${heroClass.story} ${backgroundProfiles[hero.background]}`;
+}
+function HeroAvatar({ hero, large = false }: { hero: Hero; large?: boolean }) {
+  const armor: Record<HeroClass, string> = { Warrior: "#9b7651", Ranger: "#55705a", Mage: "#645b91", Rogue: "#54545b", Paladin: "#b49a5d" };
+  const skin: Record<HeroAncestry, string> = { Human: "#c99069", Elf: "#e0b58e", Dwarf: "#b97b56", "Half-Orc": "#8d9b69" };
+  const hair: Record<HeroGender, string> = { female: "#3c2925", male: "#30231f" };
+  const isElf = hero.ancestry === "Elf";
+  const isDwarf = hero.ancestry === "Dwarf";
+  const isOrc = hero.ancestry === "Half-Orc";
+  const cape = hero.className === "Mage" ? "#37325c" : hero.className === "Paladin" ? "#6b2926" : hero.className === "Ranger" ? "#293e31" : "#332b27";
+  const weapon = hero.className === "Mage" ? "staff" : hero.className === "Ranger" ? "bow" : hero.className === "Rogue" ? "dagger" : "sword";
+  return <svg className={large ? "hero-art hero-art-large" : "hero-art"} viewBox="0 0 220 360" role="img" aria-label={`${hero.gender} ${hero.ancestry} ${hero.className} full-body avatar`}>
+    <defs><linearGradient id="avatar-metal" x1="0" x2="1"><stop offset="0" stopColor="#655b4c"/><stop offset=".5" stopColor="#d0bd94"/><stop offset="1" stopColor="#51483c"/></linearGradient><linearGradient id="avatar-cloak" x1="0" y1="0" x2="1" y2="1"><stop stopColor={cape}/><stop offset="1" stopColor="#171715"/></linearGradient></defs>
+    <ellipse cx="110" cy="337" rx="63" ry="10" fill="#000" opacity=".45"/>
+    <path d="M77 144 L52 214 L70 276 L89 271 L95 206 L110 180 L125 206 L132 271 L151 276 L169 214 L143 144Z" fill="url(#avatar-cloak)" stroke="#a98b56" strokeWidth="1.5"/>
+    <path d="M86 239 L82 311 L101 311 L110 248 L119 248 L128 311 L147 311 L137 239Z" fill={armor[hero.className]} stroke="#d2b77a" strokeWidth="1.5"/>
+    <path d="M82 304 L78 326 L104 326 L103 310 M128 310 L127 326 L153 326 L147 304" fill="#292723" stroke="#b8a77e" strokeWidth="2"/>
+    <path d="M78 144 Q110 129 142 144 L149 211 Q110 231 71 211Z" fill={armor[hero.className]} stroke="#d4bc85" strokeWidth="2"/>
+    <path d="M88 148 L110 164 L132 148 L127 205 L110 217 L93 205Z" fill="#292823" stroke="#8e784f" strokeWidth="1.5"/>
+    <path d="M94 163 L110 176 L126 163" fill="none" stroke="#d9c18d" strokeWidth="2"/>
+    <circle cx="110" cy="188" r="6" fill={hero.className === "Mage" ? "#a7baff" : hero.className === "Paladin" ? "#e9d99d" : "#8f4b3b"} stroke="#ead9ad" strokeWidth="1.5"/>
+    <path d="M79 150 L62 162 L54 204 L67 209 L87 176 M141 150 L158 162 L166 204 L153 209 L133 176" fill={armor[hero.className]} stroke="#c3a66e" strokeWidth="2"/>
+    <circle cx="61" cy="207" r="9" fill={skin[hero.ancestry]} stroke="#d5b38c" strokeWidth="1.5"/><circle cx="159" cy="207" r="9" fill={skin[hero.ancestry]} stroke="#d5b38c" strokeWidth="1.5"/>
+    <path d="M90 79 Q110 58 130 79 L133 122 Q127 145 110 148 Q93 145 87 122Z" fill={skin[hero.ancestry]} stroke="#3a2b25" strokeWidth="2"/>
+    <path d={hero.gender === "female" ? "M86 100 Q72 69 91 54 Q112 39 130 57 Q148 76 134 111 L129 81 Q110 96 91 78Z" : "M86 88 Q82 53 108 48 Q135 49 135 86 L126 72 L95 72Z"} fill={hair[hero.gender]} stroke="#1c1715" strokeWidth="2"/>
+    {hero.gender === "female" && <path d="M88 80 Q73 100 82 136 L91 146 L93 100 M132 80 Q147 100 138 136 L129 146 L127 100" fill={hair[hero.gender]}/>}
+    {isElf && <><path d="M91 83 L69 69 L81 98Z" fill={skin[hero.ancestry]} stroke="#5b4938" strokeWidth="1.5"/><path d="M129 83 L151 69 L139 98Z" fill={skin[hero.ancestry]} stroke="#5b4938" strokeWidth="1.5"/></>}
+    {isDwarf && <path d="M91 112 Q110 137 129 112 L125 137 L110 151 L95 137Z" fill={hair[hero.gender]} stroke="#5b382a" strokeWidth="1.5"/>}
+    {isOrc && <><path d="M94 119 L99 130 L104 119 M116 119 L121 130 L126 119" fill="#f2e7c9" stroke="#f2e7c9" strokeWidth="2"/><path d="M88 99 L98 102 M122 102 L132 99" stroke="#4d5a38" strokeWidth="3"/></>}
+    <path d="M96 103 L103 103 M117 103 L124 103" stroke="#30231f" strokeWidth="2.5"/><path d="M105 121 Q110 125 115 121" fill="none" stroke="#6d3e32" strokeWidth="2"/>
+    {hero.className === "Warrior" && <path d="M92 145 L110 161 L128 145" fill="none" stroke="#d7c28d" strokeWidth="3"/>}
+    {hero.className === "Mage" && <><path d="M83 77 L110 35 L137 77Z" fill="#423a6c" stroke="#d4bd7d" strokeWidth="2"/><circle cx="110" cy="59" r="4" fill="#b6c7ff"/></>}
+    {hero.className === "Ranger" && <path d="M84 150 Q110 170 136 150" fill="none" stroke="#9e754b" strokeWidth="5"/>}
+    {hero.className === "Rogue" && <path d="M85 90 L110 78 L135 90 L130 110 L90 110Z" fill="#38383e" opacity=".8"/>}
+    {hero.className === "Paladin" && <path d="M110 147 L117 165 L136 168 L121 181 L125 201 L110 190 L95 201 L99 181 L84 168 L103 165Z" fill="#e4d49d" stroke="#7c6a41" strokeWidth="1.5"/>}
+    {weapon === "sword" && <g transform="translate(157 169) rotate(17)"><path d="M0 0 L7 -67 L14 0Z" fill="url(#avatar-metal)" stroke="#e5d5ae" strokeWidth="1.2"/><path d="M-5 0 L19 0 L16 7 L-2 7Z" fill="#8d6539"/><path d="M6 7 L8 26" stroke="#8d6539" strokeWidth="5"/></g>}
+    {weapon === "dagger" && <g transform="translate(157 185) rotate(22)"><path d="M0 0 L7 -34 L14 0Z" fill="url(#avatar-metal)" stroke="#e5d5ae" strokeWidth="1.2"/><path d="M-3 0 L17 0" stroke="#8d6539" strokeWidth="4"/></g>}
+    {weapon === "staff" && <g transform="translate(163 300) rotate(5)"><path d="M0 0 L-3 -211" stroke="#9a7549" strokeWidth="6"/><circle cx="-3" cy="-220" r="11" fill="#8e9fd8" stroke="#d6d5ff" strokeWidth="2"/><circle cx="-3" cy="-220" r="4" fill="#fff"/></g>}
+    {weapon === "bow" && <g transform="translate(48 174)"><path d="M0 -42 Q-27 0 0 42" fill="none" stroke="#b58a4e" strokeWidth="5"/><path d="M0 -42 L0 42" stroke="#e6d9b6" strokeWidth="1.5"/><path d="M-2 0 L20 -38" stroke="#b58a4e" strokeWidth="2"/></g>}
+    <path d="M93 226 L127 226 M91 236 L129 236" stroke="#dfc58c" strokeWidth="2" opacity=".85"/>
+    <path d="M102 258 L118 258" stroke="#392e23" strokeWidth="3"/>
+  </svg>;
+}
+
 export default function App() {
   const [game, setGame] = useState<SaveState>(initialState);
   const [party, setParty] = useState(initialParty);
   const [showStartScreen, setShowStartScreen] = useState(true);
   const [showScenarioPicker, setShowScenarioPicker] = useState(false);
   const [showCharacterCreator, setShowCharacterCreator] = useState(false);
+  const [showDifficultyModal, setShowDifficultyModal] = useState(false);
   const [hasSavedGame, setHasSavedGame] = useState(() => {
     try { return Boolean(localStorage.getItem("dungeon-crawl-save-v1")); } catch { return false; }
   });
@@ -79,6 +157,7 @@ export default function App() {
     const id = pendingScenarioId;
     const selected = scenarios[id];
     const hero = { ...heroDraft, name: heroDraft.name.trim() || "Nameless Adventurer" };
+    setShowDifficultyModal(false);
     const classInfo = classDetails[hero.className];
     const difficultyHp = hero.difficulty === "Story" ? 6 : hero.difficulty === "Hard" ? -4 : 0;
     const maxHp = Math.max(12, classInfo.hp + difficultyHp);
@@ -149,7 +228,7 @@ export default function App() {
     const enemyDamage = roll(6) + 1;
     const newHp = Math.max(0, game.hp - enemyDamage);
     entries.push({ text: `The sentinel retaliates for ${enemyDamage} damage.`, kind: "danger" });
-    if (newHp === 0) entries.push({ text: "Eleni falls unconscious. Use a healing potion or restart the encounter.", kind: "danger" });
+    if (newHp === 0) entries.push({ text: "${game.hero.name} falls unconscious. Use a healing potion or retreat.", kind: "danger" });
     setGame(g => ({ ...g, enemyHp: afterHit, hp: newHp, round: g.round + 1, log: [...g.log, ...entries] }));
   };
 
@@ -199,23 +278,43 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      {showCharacterCreator && <div className="scenario-overlay" role="dialog" aria-modal="true" aria-labelledby="character-title"><div className="scenario-modal character-modal"><div className="section-kicker">CREATE YOUR HERO · {scenarios[pendingScenarioId].title.toUpperCase()}</div><h2 id="character-title">Who enters the dungeon?</h2><p className="scenario-lead">Build your adventurer. Your choices shape your starting health, attributes, equipment, and play style.</p><div className="character-form">
-        <label>Character name<input value={heroDraft.name} maxLength={24} onChange={e => setHeroDraft(h => ({ ...h, name: e.target.value }))} placeholder="Enter your hero's name" /></label>
-        <div className="character-field"><span>Gender</span><div className="gender-options"><button type="button" className={heroDraft.gender === "female" ? "selected" : ""} onClick={() => setHeroDraft(h => ({ ...h, gender: "female" }))}><span>♀</span> Female</button><button type="button" className={heroDraft.gender === "male" ? "selected" : ""} onClick={() => setHeroDraft(h => ({ ...h, gender: "male" }))}><span>♂</span> Male</button></div></div>
-        <label>Class<select value={heroDraft.className} onChange={e => setHeroDraft(h => ({ ...h, className: e.target.value as HeroClass }))}>{(["Warrior","Ranger","Mage","Rogue","Paladin"] as HeroClass[]).map(c => <option key={c}>{c}</option>)}</select></label>
-        <label>Ancestry<select value={heroDraft.ancestry} onChange={e => setHeroDraft(h => ({ ...h, ancestry: e.target.value as HeroAncestry }))}>{(["Human","Elf","Dwarf","Half-Orc"] as HeroAncestry[]).map(a => <option key={a}>{a}</option>)}</select></label>
-        <label>Background<select value={heroDraft.background} onChange={e => setHeroDraft(h => ({ ...h, background: e.target.value as HeroBackground }))}>{(["Noble","Outlander","Scholar","Mercenary"] as HeroBackground[]).map(b => <option key={b}>{b}</option>)}</select></label>
-        <label>Difficulty<select value={heroDraft.difficulty} onChange={e => setHeroDraft(h => ({ ...h, difficulty: e.target.value as Hero["difficulty"] }))}>{(["Story","Balanced","Hard"] as Hero["difficulty"][]).map(d => <option key={d}>{d}</option>)}</select></label>
-      </div><div className="hero-preview"><div className="hero-avatar">{heroDraft.gender === "female" ? "⚔" : "🗡"}</div><div><strong>{heroDraft.name.trim() || "Nameless Adventurer"}</strong><p>{heroDraft.gender === "female" ? "Female" : "Male"} {heroDraft.ancestry} {heroDraft.className} · {heroDraft.background}</p><small>{classDetails[heroDraft.className].hp + (heroDraft.difficulty === "Story" ? 6 : heroDraft.difficulty === "Hard" ? -4 : 0)} starting HP · {classDetails[heroDraft.className].weapon}</small></div></div><div className="character-actions"><button className="secondary-button" onClick={() => { setShowCharacterCreator(false); setShowScenarioPicker(true); }}>Back to campaigns</button><button className="primary-button" onClick={beginAdventure}>Begin adventure ↗</button></div></div></div>}
-      {showScenarioPicker && <div className="scenario-overlay" role="dialog" aria-modal="true" aria-labelledby="scenario-title"><div className="scenario-modal"><div className="section-kicker">START A NEW CAMPAIGN</div><h2 id="scenario-title">Choose your adventure</h2><p className="scenario-lead">Pick a world to explore. Starting a new campaign resets the current run; your other browser data remains untouched.</p><div className="scenario-grid">{(Object.values(scenarios) as Scenario[]).map(s => <button key={s.id} className={"scenario-card " + s.id} onClick={() => startScenario(s.id)}><span className="scenario-symbol">{s.id === "lost-heir" ? "♛" : s.id === "plague-below" ? "☣" : "🐉"}</span><strong>{s.title}</strong><small>{s.tagline}</small><span className="scenario-start">START ADVENTURE ↗</span></button>)}</div><button className="secondary-button scenario-cancel" onClick={() => { setShowScenarioPicker(false); setShowStartScreen(true); }}>Back to main menu</button></div></div>}
+      {showCharacterCreator && <div className="scenario-overlay creator-overlay" role="dialog" aria-modal="true" aria-labelledby="character-title"><div className="scenario-modal character-modal creator-modal">
+        <div className="section-kicker">CREATE YOUR HERO · {scenarios[pendingScenarioId].title.toUpperCase()}</div>
+        <h2 id="character-title">Shape your legend</h2>
+        <p className="scenario-lead">Choose your lineage and calling. Your avatar, starting attributes, and origin story update as you build your hero.</p>
+        <div className="creator-identity">
+          <label>Character name<input value={heroDraft.name} maxLength={24} onChange={e => setHeroDraft(h => ({ ...h, name: e.target.value }))} placeholder="Enter your hero's name" /></label>
+          <div className="character-field"><span>Gender</span><div className="gender-options"><button type="button" className={heroDraft.gender === "female" ? "selected" : ""} onClick={() => setHeroDraft(h => ({ ...h, gender: "female" }))}>♀ Female</button><button type="button" className={heroDraft.gender === "male" ? "selected" : ""} onClick={() => setHeroDraft(h => ({ ...h, gender: "male" }))}>♂ Male</button></div></div>
+        </div>
+        <div className="creator-layout">
+          <section className="creator-options">
+            <label>Class<select value={heroDraft.className} onChange={e => setHeroDraft(h => ({ ...h, className: e.target.value as HeroClass }))}>{classOrder.map(c => <option key={c}>{c}</option>)}</select><small>{classProfiles[heroDraft.className].role} · {classProfiles[heroDraft.className].strengths}</small></label>
+            <label>Ancestry<select value={heroDraft.ancestry} onChange={e => setHeroDraft(h => ({ ...h, ancestry: e.target.value as HeroAncestry }))}>{ancestryOrder.map(a => <option key={a}>{a}</option>)}</select><small>{ancestryDetails[heroDraft.ancestry].trait} · {ancestryDetails[heroDraft.ancestry].description}</small></label>
+            <label>Background<select value={heroDraft.background} onChange={e => setHeroDraft(h => ({ ...h, background: e.target.value as HeroBackground }))}>{(["Noble","Outlander","Scholar","Mercenary"] as HeroBackground[]).map(b => <option key={b}>{b}</option>)}</select><small>{backgroundProfiles[heroDraft.background]}</small></label>
+            <div className="creator-class-card"><span className="section-kicker">CLASS CHARACTERISTICS</span><strong>{heroDraft.className}</strong><p>{classProfiles[heroDraft.className].strengths}</p><div className="creator-gear"><span>Weapon</span><b>{classDetails[heroDraft.className].weapon}</b></div><div className="creator-gear"><span>Armor</span><b>{classDetails[heroDraft.className].armor}</b></div></div>
+            <div className="creator-class-card ancestry-card"><span className="section-kicker">ANCESTRY CHARACTERISTICS</span><strong>{heroDraft.ancestry} · {ancestryDetails[heroDraft.ancestry].trait}</strong><p>{ancestryDetails[heroDraft.ancestry].description}</p><div className="bonus-tags">{Object.entries(ancestryDetails[heroDraft.ancestry].bonuses).map(([stat, bonus]) => <span key={stat}>{stat} +{bonus}</span>)}</div></div>
+          </section>
+          <section className="creator-preview-column">
+            <div className="avatar-stage"><div className="avatar-glow"/><HeroAvatar hero={heroDraft} large/><div className="avatar-caption"><strong>{heroDraft.name.trim() || "Nameless Adventurer"}</strong><span>{heroDraft.gender === "female" ? "Female" : "Male"} {heroDraft.ancestry} {heroDraft.className}</span><small>{classDetails[heroDraft.className].hp} base HP · {classDetails[heroDraft.className].weapon}</small></div></div>
+            <div className="creator-stat-sheet"><div className="sheet-heading"><span className="section-kicker">STARTING CHARACTER SHEET</span><b>{classDetails[heroDraft.className].hp} BASE HP</b></div><div className="creator-stat-grid">{getHeroStats(heroDraft).map(([stat, score, mod]) => <div className="creator-stat" key={stat}><span>{stat}</span><strong>{score}</strong><small>{mod} modifier</small></div>)}</div><div className="sheet-notes"><div><span>Starting weapon</span><strong>{classDetails[heroDraft.className].weapon}</strong></div><div><span>Starting armor</span><strong>{classDetails[heroDraft.className].armor}</strong></div><div><span>Ancestry trait</span><strong>{ancestryDetails[heroDraft.ancestry].trait}</strong></div></div></div>
+            <div className="origin-story"><span className="section-kicker">YOUR ORIGIN STORY</span><p>{heroOriginStory(heroDraft)}</p></div>
+          </section>
+        </div>
+        <div className="character-actions"><button className="secondary-button" onClick={() => { setShowCharacterCreator(false); setShowScenarioPicker(true); }}>Back to campaigns</button><button className="primary-button" onClick={() => setShowDifficultyModal(true)}>Begin adventure ↗</button></div>
+      </div></div>}
+      {showDifficultyModal && <div className="scenario-overlay difficulty-overlay" role="dialog" aria-modal="true" aria-labelledby="difficulty-title"><div className="scenario-modal difficulty-modal"><div className="section-kicker">FINAL PREPARATIONS</div><h2 id="difficulty-title">Choose your difficulty</h2><p className="scenario-lead">Set the challenge before entering {scenarios[pendingScenarioId].title}. You can review the impact before committing.</p><div className="difficulty-options">
+        <button className={heroDraft.difficulty === "Story" ? "difficulty-card selected" : "difficulty-card"} onClick={() => setHeroDraft(h => ({ ...h, difficulty: "Story" }))}><span className="difficulty-mark">I</span><strong>Story</strong><small>Focus on exploration and narrative.</small><ul><li>+6 starting HP</li><li>Forgiving combat pace</li><li>Best for a relaxed first run</li></ul></button>
+        <button className={heroDraft.difficulty === "Balanced" ? "difficulty-card selected" : "difficulty-card"} onClick={() => setHeroDraft(h => ({ ...h, difficulty: "Balanced" }))}><span className="difficulty-mark">II</span><strong>Balanced</strong><small>A fair test of tactics and choices.</small><ul><li>Class base HP</li><li>Standard enemy damage</li><li>Recommended default</li></ul></button>
+        <button className={heroDraft.difficulty === "Hard" ? "difficulty-card selected" : "difficulty-card"} onClick={() => setHeroDraft(h => ({ ...h, difficulty: "Hard" }))}><span className="difficulty-mark">III</span><strong>Hard</strong><small>Every mistake can cost you.</small><ul><li>−4 starting HP</li><li>Less room for mistakes</li><li>For experienced adventurers</li></ul></button>
+      </div><div className="character-actions"><button className="secondary-button" onClick={() => setShowDifficultyModal(false)}>Back to hero</button><button className="primary-button" onClick={beginAdventure}>Enter the dungeon ↗</button></div></div></div>}{showScenarioPicker && <div className="scenario-overlay" role="dialog" aria-modal="true" aria-labelledby="scenario-title"><div className="scenario-modal"><div className="section-kicker">START A NEW CAMPAIGN</div><h2 id="scenario-title">Choose your adventure</h2><p className="scenario-lead">Pick a world to explore. Starting a new campaign resets the current run; your other browser data remains untouched.</p><div className="scenario-grid">{(Object.values(scenarios) as Scenario[]).map(s => <button key={s.id} className={"scenario-card " + s.id} onClick={() => startScenario(s.id)}><span className="scenario-symbol">{s.id === "lost-heir" ? "♛" : s.id === "plague-below" ? "☣" : "🐉"}</span><strong>{s.title}</strong><small>{s.tagline}</small><span className="scenario-start">START ADVENTURE ↗</span></button>)}</div><button className="secondary-button scenario-cancel" onClick={() => { setShowScenarioPicker(false); setShowStartScreen(true); }}>Back to main menu</button></div></div>}
       <header className="topbar"><a className="brand" href="#top"><span className="brand-mark">✦</span><span>DUNGEON<span className="brand-muted">CRAWL</span><small> {activeScenario.title.toUpperCase()} CAMPAIGN</small></span></a><div className="top-actions"><span className="online-dot"/> <span className="prototype-label">SINGLE-PLAYER PROTOTYPE</span><button className="ghost-button" onClick={reset} title="Return to main menu">↻ <span>New game</span></button></div></header>
       <main className="layout">
         <aside className="sidebar">
           <div className="section-kicker">YOUR HERO</div>
-          <div className="hero-card"><div className="hero-avatar">{game.hero.gender === "female" ? "⚔" : "🗡"}</div><div><h2>{game.hero.name}</h2><p>{game.hero.ancestry} · {game.hero.className}</p><span className="level-pill">LEVEL 1 · {game.hero.gender.toUpperCase()}</span></div></div>
+          <div className="hero-card"><div className="hero-avatar"><HeroAvatar hero={game.hero}/></div><div><h2>{game.hero.name}</h2><p>{game.hero.ancestry} · {game.hero.className}</p><span className="level-pill">LEVEL 1 · {game.hero.gender.toUpperCase()}</span></div></div>
           <div className="stat-line"><span>❤️ Health</span><strong>{game.hp} <i>/ {game.maxHp}</i></strong></div><div className="meter"><span className={game.hp < 9 ? "low" : ""} style={{ width: `${game.hp / game.maxHp * 100}%` }}/></div>
           <div className="stat-line"><span>✦ Experience</span><strong>{game.xp} <i>/ 100 XP</i></strong></div><div className="meter xp"><span style={{ width: `${Math.min(100, game.xp)}%` }}/></div>
-          <div className="stat-grid">{heroClassInfo.stats.map(s => <div className="stat-tile" key={s[0]}><small>{s[0]}</small><strong>{s[1]}</strong><span>{s[2]}</span></div>)}</div>
+          <div className="stat-grid">{getHeroStats(game.hero).map(s => <div className="stat-tile" key={s[0]}><small>{s[0]}</small><strong>{s[1]}</strong><span>{s[2]}</span></div>)}</div>
           <div className="side-divider"/><div className="section-kicker">EQUIPMENT</div><div className="equipment"><span>⚔</span><div><strong>{heroClassInfo.weapon}</strong><small>{heroClassInfo.damage}</small></div></div><div className="equipment"><span>🛡</span><div><strong>{heroClassInfo.armor}</strong><small>Armor Class 16</small></div></div><div className="equipment"><span>🧪</span><div><strong>Healing Potions <b>×{game.potions}</b></strong><small>Restore 2d4 + 2 HP</small></div></div>
           <div className="side-divider"/><div className="section-kicker">PARTY COMPANIONS</div>{party.map(p => <div className="companion" key={p.name}><div className="companion-icon">{p.icon}</div><div className="companion-info"><strong>{p.name}</strong><small>{p.role}</small><div className="mini-meter"><span style={{ width: `${p.hp / p.maxHp * 100}%` }}/></div></div><b>{p.hp}<i>/{p.maxHp}</i></b></div>)}
           <div className="party-note">AI companions are simulated in this prototype. Networked player turns are planned for Phase 2.</div>
