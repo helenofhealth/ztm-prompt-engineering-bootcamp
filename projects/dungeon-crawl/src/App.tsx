@@ -6,10 +6,23 @@ type Scenario = { id: ScenarioId; title: string; tagline: string; intro: string;
 type LogEntry = { text: string; kind?: "roll" | "danger" | "good" };
 type PartyMember = { name: string; role: string; hp: number; maxHp: number; detail: string; icon: string };
 
+type HeroGender = "female" | "male";
+type HeroClass = "Warrior" | "Ranger" | "Mage" | "Rogue" | "Paladin";
+type HeroAncestry = "Human" | "Elf" | "Dwarf" | "Half-Orc";
+type HeroBackground = "Noble" | "Outlander" | "Scholar" | "Mercenary";
+type Hero = { name: string; gender: HeroGender; className: HeroClass; ancestry: HeroAncestry; background: HeroBackground; difficulty: "Story" | "Balanced" | "Hard" };
 type SaveState = {
   scenarioId: ScenarioId; scene: Scene; hp: number; maxHp: number; gold: number; xp: number; potions: number;
   inventory: string[]; log: LogEntry[]; explored: string[]; enemyHp: number; enemyMaxHp: number;
-  round: number; lastRoll: number | null;
+  round: number; lastRoll: number | null; hero: Hero;
+};
+const defaultHero: Hero = { name: "Eleni", gender: "female", className: "Warrior", ancestry: "Human", background: "Noble", difficulty: "Balanced" };
+const classDetails: Record<HeroClass, { hp: number; stats: [string, string, string][]; weapon: string; armor: string; attackBonus: number; damage: string }> = {
+  Warrior: { hp: 24, stats: [["STR","16","+3"],["DEX","12","+1"],["CON","15","+2"],["INT","10","+0"],["WIS","13","+1"],["CHA","14","+2"]], weapon: "Ancestral Longsword", armor: "Reinforced Armor", attackBonus: 5, damage: "1d8 + 3 damage" },
+  Ranger: { hp: 21, stats: [["STR","12","+1"],["DEX","16","+3"],["CON","13","+1"],["INT","12","+1"],["WIS","15","+2"],["CHA","10","+0"]], weapon: "Recurve Longbow", armor: "Trail-worn Leather", attackBonus: 5, damage: "1d8 + 3 damage" },
+  Mage: { hp: 17, stats: [["STR","8","−1"],["DEX","12","+1"],["CON","12","+1"],["INT","16","+3"],["WIS","14","+2"],["CHA","13","+1"]], weapon: "Runed Staff", armor: "Warded Robes", attackBonus: 5, damage: "1d8 + 3 arcane damage" },
+  Rogue: { hp: 20, stats: [["STR","10","+0"],["DEX","17","+3"],["CON","13","+1"],["INT","14","+2"],["WIS","12","+1"],["CHA","14","+2"]], weapon: "Twin Daggers", armor: "Shadow Leather", attackBonus: 6, damage: "1d8 + 3 damage" },
+  Paladin: { hp: 26, stats: [["STR","16","+3"],["DEX","10","+0"],["CON","16","+3"],["INT","10","+0"],["WIS","13","+1"],["CHA","15","+2"]], weapon: "Oathbound Blade", armor: "Sanctified Plate", attackBonus: 5, damage: "1d8 + 3 radiant damage" },
 };
 
 const initialParty: PartyMember[] = [
@@ -24,7 +37,7 @@ const scenarios: Record<ScenarioId, Scenario> = {
   "dragon-hoard": { id: "dragon-hoard", title: "The Dragon's Hoard", tagline: "Every treasure has a price.", intro: "A split mountain opens into a cavern of black glass and molten gold. Coins rain from the ceiling like sparks. Somewhere beyond the bridge, a sleeping dragon breathes—and every exhale makes the stone beneath your boots tremble.", quote: "“Take one coin, and the mountain takes one name.”", gateChoices: ["Read the runic bargain", "Approach the obsidian door", "Investigate the wishing pool", "Search the fallen treasure vault"] }
 };
 const initialState: SaveState = {
-  scenarioId: "lost-heir", scene: "gate", hp: 24, maxHp: 24, gold: 25, xp: 0, potions: 2,
+  scenarioId: "lost-heir", scene: "gate", hp: 24, maxHp: 24, gold: 25, xp: 0, potions: 2, hero: defaultHero,
   inventory: starterInventory, log: [
     { text: "Campaign started: Eleni, the Lost Heir. Your signet has awakened.", kind: "good" },
     { text: "Brom, Lyra, and Mira join your expedition." },
@@ -35,34 +48,74 @@ const initialState: SaveState = {
 const roll = (sides: number) => Math.floor(Math.random() * sides) + 1;
 
 export default function App() {
-  const [game, setGame] = useState<SaveState>(() => {
-    try {
-      const raw = localStorage.getItem("dungeon-crawl-save-v1");
-      return raw ? { ...initialState, ...JSON.parse(raw) as Partial<SaveState> } : initialState;
-    } catch { return initialState; }
-  });
+  const [game, setGame] = useState<SaveState>(initialState);
   const [party, setParty] = useState(initialParty);
+  const [showStartScreen, setShowStartScreen] = useState(true);
   const [showScenarioPicker, setShowScenarioPicker] = useState(false);
+  const [showCharacterCreator, setShowCharacterCreator] = useState(false);
+  const [hasSavedGame, setHasSavedGame] = useState(() => {
+    try { return Boolean(localStorage.getItem("dungeon-crawl-save-v1")); } catch { return false; }
+  });
+  const [gameStarted, setGameStarted] = useState(false);
+  const [pendingScenarioId, setPendingScenarioId] = useState<ScenarioId>("lost-heir");
+  const [heroDraft, setHeroDraft] = useState<Hero>(defaultHero);
   const [tab, setTab] = useState<"journal" | "inventory">("journal");
 
   useEffect(() => {
-    localStorage.setItem("dungeon-crawl-save-v1", JSON.stringify(game));
-  }, [game]);
+    if (gameStarted) {
+      localStorage.setItem("dungeon-crawl-save-v1", JSON.stringify(game));
+      setHasSavedGame(true);
+    }
+  }, [game, gameStarted]);
 
   const activeScenario = scenarios[game.scenarioId];
   const startScenario = (id: ScenarioId) => {
+    setPendingScenarioId(id);
+    setHeroDraft(game.hero ?? defaultHero);
+    setShowScenarioPicker(false);
+    setShowCharacterCreator(true);
+  };
+
+  const beginAdventure = () => {
+    const id = pendingScenarioId;
     const selected = scenarios[id];
+    const hero = { ...heroDraft, name: heroDraft.name.trim() || "Nameless Adventurer" };
+    const classInfo = classDetails[hero.className];
+    const difficultyHp = hero.difficulty === "Story" ? 6 : hero.difficulty === "Hard" ? -4 : 0;
+    const maxHp = Math.max(12, classInfo.hp + difficultyHp);
+    const classGear: Record<HeroClass, string[]> = {
+      Warrior: ["Ancestral longsword", "Reinforced armor", "Shield"],
+      Ranger: ["Recurve longbow", "Trail-worn leather", "Twin hunting knives"],
+      Mage: ["Runed staff", "Warded robes", "Spellbook"],
+      Rogue: ["Twin daggers", "Shadow leather", "Lockpicks"],
+      Paladin: ["Oathbound blade", "Sanctified plate", "Holy emblem"],
+    };
+    const scenarioGear = id === "lost-heir" ? ["Signet of the First King"] : id === "plague-below" ? ["Sealed respirator"] : ["Dragon-glass compass"];
     const next: SaveState = {
-      ...initialState, scenarioId: id, scene: "gate",
-      inventory: id === "lost-heir" ? [...starterInventory] : starterInventory.filter(item => item !== "Signet of the First King").concat(id === "plague-below" ? ["Sealed respirator"] : ["Dragon-glass compass"]),
+      ...initialState, scenarioId: id, scene: "gate", hero, hp: maxHp, maxHp,
+      inventory: [...classGear[hero.className], "5 torches", "50 ft rope", "3 days of rations", ...scenarioGear],
       log: [
         { text: "New campaign started: " + selected.title + ".", kind: "good" },
+        { text: hero.name + " begins this adventure as a " + hero.ancestry + " " + hero.className + " (" + hero.gender + ").", kind: "good" },
         { text: id === "lost-heir" ? "Your signet has awakened. Brom, Lyra, and Mira join your expedition." : id === "plague-below" ? "Brom, Lyra, and Mira join your expedition. Keep your masks sealed." : "Brom, Lyra, and Mira join your expedition. The dragon has not stirred—yet." },
         { text: selected.quote, kind: "danger" }
       ],
       explored: [], enemyHp: 22, enemyMaxHp: 22, round: 1, lastRoll: null
     };
-    setGame(next); setParty(initialParty); setTab("journal"); setShowScenarioPicker(false);
+    setGame(next); setParty(initialParty); setTab("journal"); setShowCharacterCreator(false); setShowStartScreen(false); setGameStarted(true);
+  };
+
+  const loadSavedGame = () => {
+    try {
+      const raw = localStorage.getItem("dungeon-crawl-save-v1");
+      if (!raw) { setHasSavedGame(false); return; }
+      const parsed = JSON.parse(raw) as Partial<SaveState>;
+      const loaded = { ...initialState, ...parsed, hero: { ...defaultHero, ...(parsed.hero ?? {}) } };
+      if (!scenarios[loaded.scenarioId]) loaded.scenarioId = "lost-heir";
+      setGame(loaded); setHeroDraft(loaded.hero); setParty(initialParty); setShowStartScreen(false); setGameStarted(true);
+    } catch {
+      setHasSavedGame(false);
+    }
   };
 
   const addLog = (entries: LogEntry[]) => setGame(g => ({ ...g, log: [...g.log, ...entries].slice(-40) }));
@@ -84,10 +137,11 @@ export default function App() {
   };
 
   const attack = () => {
-    const die = roll(20); const hit = die + 5 >= 12 || die === 20;
+    const bonus = classDetails[game.hero.className].attackBonus;
+    const die = roll(20); const hit = die + bonus >= 12 || die === 20;
     const damage = hit ? roll(8) + 3 : 0;
     const afterHit = Math.max(0, game.enemyHp - damage);
-    const entries: LogEntry[] = [{ text: `Eleni attacks: d20 (${die}) + 5. ${hit ? `Hit for ${damage} damage!` : "Miss!"}`, kind: hit ? "good" : "danger" }];
+    const entries: LogEntry[] = [{ text: `${game.hero.name} attacks: d20 (${die}) + ${bonus}. ${hit ? `Hit for ${damage} damage!` : "Miss!"}`, kind: hit ? "good" : "danger" }];
     if (afterHit <= 0) {
       entries.push({ text: "The sentinel collapses into a storm of black ash. The chamber falls silent.", kind: "good" });
       setGame(g => ({ ...g, scene: "victory", enemyHp: 0, xp: g.xp + 50, gold: g.gold + 15, log: [...g.log, ...entries] }));
@@ -124,28 +178,53 @@ export default function App() {
     }
   }, [game.scene, game.round, game.scenarioId, activeScenario]);
 
-  const reset = () => setShowScenarioPicker(true);
+  const reset = () => { setShowStartScreen(false); setShowScenarioPicker(true); };
   const alive = game.hp > 0;
+  const heroClassInfo = classDetails[game.hero.className];
+
+  if (showStartScreen) return (
+    <div className="start-screen">
+      <div className="start-emblem">✦</div>
+      <div className="start-kicker">A DARK FANTASY ROLE-PLAYING ADVENTURE</div>
+      <h1>DUNGEON<span>CRAWL</span></h1>
+      <p className="start-tagline">Your choices shape the legend.</p>
+      <div className="start-menu">
+        <div className="section-kicker">YOUR ADVENTURE AWAITS</div>
+        <button className="start-primary" disabled={!hasSavedGame} onClick={loadSavedGame}><span>↻</span><div><strong>Load saved game</strong><small>{hasSavedGame ? "Continue where your last adventure ended" : "No saved adventure found in this browser"}</small></div><b>→</b></button>
+        <button className="start-primary" onClick={() => { setHeroDraft(defaultHero); setShowScenarioPicker(true); }}><span>✦</span><div><strong>Start a new game</strong><small>Choose a campaign and create your hero</small></div><b>→</b></button>
+        <p className="start-footnote">Saved games are stored in this browser on this device.</p>
+      </div>
+      <div className="start-worlds"><span>THE LOST HEIR</span><i>✦</i><span>THE PLAGUE BELOW</span><i>✦</i><span>THE DRAGON'S HOARD</span></div>
+    </div>
+  );
 
   return (
     <div className="app-shell">
-      {showScenarioPicker && <div className="scenario-overlay" role="dialog" aria-modal="true" aria-labelledby="scenario-title"><div className="scenario-modal"><div className="section-kicker">START A NEW CAMPAIGN</div><h2 id="scenario-title">Choose your adventure</h2><p className="scenario-lead">Pick a world to explore. Starting a new campaign resets the current run; your other browser data remains untouched.</p><div className="scenario-grid">{(Object.values(scenarios) as Scenario[]).map(s => <button key={s.id} className={"scenario-card " + s.id} onClick={() => startScenario(s.id)}><span className="scenario-symbol">{s.id === "lost-heir" ? "♛" : s.id === "plague-below" ? "☣" : "🐉"}</span><strong>{s.title}</strong><small>{s.tagline}</small><span className="scenario-start">START ADVENTURE ↗</span></button>)}</div><button className="secondary-button scenario-cancel" onClick={() => setShowScenarioPicker(false)}>Return to current campaign</button></div></div>}
-      <header className="topbar"><a className="brand" href="#top"><span className="brand-mark">✦</span><span>DUNGEON<span className="brand-muted">CRAWL</span><small> {activeScenario.title.toUpperCase()} CAMPAIGN</small></span></a><div className="top-actions"><span className="online-dot"/> <span className="prototype-label">SINGLE-PLAYER PROTOTYPE</span><button className="ghost-button" onClick={reset} title="Start a new campaign">↻ <span>New game</span></button></div></header>
+      {showCharacterCreator && <div className="scenario-overlay" role="dialog" aria-modal="true" aria-labelledby="character-title"><div className="scenario-modal character-modal"><div className="section-kicker">CREATE YOUR HERO · {scenarios[pendingScenarioId].title.toUpperCase()}</div><h2 id="character-title">Who enters the dungeon?</h2><p className="scenario-lead">Build your adventurer. Your choices shape your starting health, attributes, equipment, and play style.</p><div className="character-form">
+        <label>Character name<input value={heroDraft.name} maxLength={24} onChange={e => setHeroDraft(h => ({ ...h, name: e.target.value }))} placeholder="Enter your hero's name" /></label>
+        <div className="character-field"><span>Gender</span><div className="gender-options"><button type="button" className={heroDraft.gender === "female" ? "selected" : ""} onClick={() => setHeroDraft(h => ({ ...h, gender: "female" }))}><span>♀</span> Female</button><button type="button" className={heroDraft.gender === "male" ? "selected" : ""} onClick={() => setHeroDraft(h => ({ ...h, gender: "male" }))}><span>♂</span> Male</button></div></div>
+        <label>Class<select value={heroDraft.className} onChange={e => setHeroDraft(h => ({ ...h, className: e.target.value as HeroClass }))}>{(["Warrior","Ranger","Mage","Rogue","Paladin"] as HeroClass[]).map(c => <option key={c}>{c}</option>)}</select></label>
+        <label>Ancestry<select value={heroDraft.ancestry} onChange={e => setHeroDraft(h => ({ ...h, ancestry: e.target.value as HeroAncestry }))}>{(["Human","Elf","Dwarf","Half-Orc"] as HeroAncestry[]).map(a => <option key={a}>{a}</option>)}</select></label>
+        <label>Background<select value={heroDraft.background} onChange={e => setHeroDraft(h => ({ ...h, background: e.target.value as HeroBackground }))}>{(["Noble","Outlander","Scholar","Mercenary"] as HeroBackground[]).map(b => <option key={b}>{b}</option>)}</label>
+        <label>Difficulty<select value={heroDraft.difficulty} onChange={e => setHeroDraft(h => ({ ...h, difficulty: e.target.value as Hero["difficulty"] }))}>{(["Story","Balanced","Hard"] as Hero["difficulty"][]).map(d => <option key={d}>{d}</option>)}</label>
+      </div><div className="hero-preview"><div className="hero-avatar">{heroDraft.gender === "female" ? "⚔" : "🗡"}</div><div><strong>{heroDraft.name.trim() || "Nameless Adventurer"}</strong><p>{heroDraft.gender === "female" ? "Female" : "Male"} {heroDraft.ancestry} {heroDraft.className} · {heroDraft.background}</p><small>{classDetails[heroDraft.className].hp + (heroDraft.difficulty === "Story" ? 6 : heroDraft.difficulty === "Hard" ? -4 : 0)} starting HP · {classDetails[heroDraft.className].weapon}</small></div></div><div className="character-actions"><button className="secondary-button" onClick={() => { setShowCharacterCreator(false); setShowScenarioPicker(true); }}>Back to campaigns</button><button className="primary-button" onClick={beginAdventure}>Begin adventure ↗</button></div></div></div>}
+      {showScenarioPicker && <div className="scenario-overlay" role="dialog" aria-modal="true" aria-labelledby="scenario-title"><div className="scenario-modal"><div className="section-kicker">START A NEW CAMPAIGN</div><h2 id="scenario-title">Choose your adventure</h2><p className="scenario-lead">Pick a world to explore. Starting a new campaign resets the current run; your other browser data remains untouched.</p><div className="scenario-grid">{(Object.values(scenarios) as Scenario[]).map(s => <button key={s.id} className={"scenario-card " + s.id} onClick={() => startScenario(s.id)}><span className="scenario-symbol">{s.id === "lost-heir" ? "♛" : s.id === "plague-below" ? "☣" : "🐉"}</span><strong>{s.title}</strong><small>{s.tagline}</small><span className="scenario-start">START ADVENTURE ↗</span></button>)}</div><button className="secondary-button scenario-cancel" onClick={() => { setShowScenarioPicker(false); setShowStartScreen(true); }}>Back to main menu</button></div></div>}
+      <header className="topbar"><a className="brand" href="#top"><span className="brand-mark">✦</span><span>DUNGEON<span className="brand-muted">CRAWL</span><small> {activeScenario.title.toUpperCase()} CAMPAIGN</small></span></a><div className="top-actions"><span className="online-dot"/> <span className="prototype-label">SINGLE-PLAYER PROTOTYPE</span><button className="ghost-button" onClick={reset} title="Return to main menu">↻ <span>New game</span></button></div></header>
       <main className="layout">
         <aside className="sidebar">
           <div className="section-kicker">YOUR HERO</div>
-          <div className="hero-card"><div className="hero-avatar">⚔</div><div><h2>Eleni</h2><p>The Lost Heir · Warrior</p><span className="level-pill">LEVEL 1</span></div></div>
+          <div className="hero-card"><div className="hero-avatar">{game.hero.gender === "female" ? "⚔" : "🗡"}</div><div><h2>{game.hero.name}</h2><p>{game.hero.ancestry} · {game.hero.className}</p><span className="level-pill">LEVEL 1 · {game.hero.gender.toUpperCase()}</span></div></div>
           <div className="stat-line"><span>❤️ Health</span><strong>{game.hp} <i>/ {game.maxHp}</i></strong></div><div className="meter"><span className={game.hp < 9 ? "low" : ""} style={{ width: `${game.hp / game.maxHp * 100}%` }}/></div>
           <div className="stat-line"><span>✦ Experience</span><strong>{game.xp} <i>/ 100 XP</i></strong></div><div className="meter xp"><span style={{ width: `${Math.min(100, game.xp)}%` }}/></div>
-          <div className="stat-grid">{[["STR","16","+3"],["DEX","12","+1"],["CON","15","+2"],["INT","10","+0"],["WIS","13","+1"],["CHA","14","+2"]].map(s => <div className="stat-tile" key={s[0]}><small>{s[0]}</small><strong>{s[1]}</strong><span>{s[2]}</span></div>)}</div>
-          <div className="side-divider"/><div className="section-kicker">EQUIPMENT</div><div className="equipment"><span>⚔</span><div><strong>Ancestral Longsword</strong><small>1d8 + 3 damage</small></div></div><div className="equipment"><span>🛡</span><div><strong>Reinforced Armor</strong><small>Armor Class 16</small></div></div><div className="equipment"><span>🧪</span><div><strong>Healing Potions <b>×{game.potions}</b></strong><small>Restore 2d4 + 2 HP</small></div></div>
+          <div className="stat-grid">{heroClassInfo.stats.map(s => <div className="stat-tile" key={s[0]}><small>{s[0]}</small><strong>{s[1]}</strong><span>{s[2]}</span></div>)}</div>
+          <div className="side-divider"/><div className="section-kicker">EQUIPMENT</div><div className="equipment"><span>⚔</span><div><strong>{heroClassInfo.weapon}</strong><small>{heroClassInfo.damage}</small></div></div><div className="equipment"><span>🛡</span><div><strong>{heroClassInfo.armor}</strong><small>Armor Class 16</small></div></div><div className="equipment"><span>🧪</span><div><strong>Healing Potions <b>×{game.potions}</b></strong><small>Restore 2d4 + 2 HP</small></div></div>
           <div className="side-divider"/><div className="section-kicker">PARTY COMPANIONS</div>{party.map(p => <div className="companion" key={p.name}><div className="companion-icon">{p.icon}</div><div className="companion-info"><strong>{p.name}</strong><small>{p.role}</small><div className="mini-meter"><span style={{ width: `${p.hp / p.maxHp * 100}%` }}/></div></div><b>{p.hp}<i>/{p.maxHp}</i></b></div>)}
           <div className="party-note">AI companions are simulated in this prototype. Networked player turns are planned for Phase 2.</div>
         </aside>
         <section className="main-column">
           <div className={`scene-art ${sceneContent.art}`}><div className="art-grain"/><div className="scene-badge"><span/> {sceneContent.eyebrow}</div><div className="art-title"><span>THE CHRONICLES OF</span><h1>{activeScenario.title.toUpperCase()}</h1><p>{activeScenario.tagline}</p></div><div className="art-rune">ᚷ</div></div>
           <article className="story-panel"><div className="chapter-label"><span>✦</span> {sceneContent.eyebrow}</div><h2>{sceneContent.title}</h2><p>{sceneContent.body}</p><blockquote>{sceneContent.quote}</blockquote>
-            {game.scene === "combat" ? <div className="combat-panel"><div className="enemy-heading"><span>☠</span><div><strong>Crownbound Sentinel</strong><small>Undead construct · AC 12</small></div><b>{game.enemyHp} / {game.enemyMaxHp} HP</b></div><div className="meter enemy-meter"><span style={{ width: `${game.enemyHp / game.enemyMaxHp * 100}%` }}/></div><div className="combat-actions"><button className="primary-button" onClick={attack} disabled={!alive || game.enemyHp <= 0}>⚔ Attack with longsword</button><button className="secondary-button" onClick={usePotion} disabled={game.potions <= 0 || game.hp === game.maxHp}>🧪 Drink potion ({game.potions})</button></div>{!alive && <button className="primary-button" onClick={() => { setGame(g => ({ ...g, hp: 12, scene: "gate", enemyHp: g.enemyMaxHp, log: [...g.log, { text: "The party drags you to safety. You recover with 12 HP; the encounter resets.", kind: "good" }] })); }}>Recover and retreat</button>}</div> : null}
+            {game.scene === "combat" ? <div className="combat-panel"><div className="enemy-heading"><span>☠</span><div><strong>{game.scenarioId === "plague-below" ? "Spore-Twisted Warden" : game.scenarioId === "dragon-hoard" ? "Hoardbound Guardian" : "Crownbound Sentinel"}</strong><small>Undead construct · AC 12</small></div><b>{game.enemyHp} / {game.enemyMaxHp} HP</b></div><div className="meter enemy-meter"><span style={{ width: `${game.enemyHp / game.enemyMaxHp * 100}%` }}/></div><div className="combat-actions"><button className="primary-button" onClick={attack} disabled={!alive || game.enemyHp <= 0}>⚔ Attack with {heroClassInfo.weapon.toLowerCase()}</button><button className="secondary-button" onClick={usePotion} disabled={game.potions <= 0 || game.hp === game.maxHp}>🧪 Drink potion ({game.potions})</button></div>{!alive && <button className="primary-button" onClick={() => { setGame(g => ({ ...g, hp: 12, scene: "gate", enemyHp: g.enemyMaxHp, log: [...g.log, { text: "The party drags you to safety. You recover with 12 HP; the encounter resets.", kind: "good" }] })); }}>Recover and retreat</button>}</div> : null}
             {game.scene === "gate" && <div className="choices"><div className="choices-heading">WHAT WILL YOU DO? <span>CHOOSE YOUR PATH</span></div>
               {choose("gate",activeScenario.gateChoices[0],game.scenarioId === "lost-heir" ? "Study the pedestal and faceless statues before committing." : game.scenarioId === "plague-below" ? "Study the quarantine records for clues to the outbreak." : "Study the runes before making a bargain.",() => { const success = check(game.scenarioId === "lost-heir" ? "Royal history" : game.scenarioId === "plague-below" ? "Medical investigation" : "Arcane lore", 1, 12); setGame(g => ({ ...g, scene: "contract", xp: g.xp + (success ? 10 : 0) })); })}
               {choose("gate",activeScenario.gateChoices[1],game.scenarioId === "lost-heir" ? "Answer the voice calling you Majesty." : game.scenarioId === "plague-below" ? "Investigate the sealed room where the first cases vanished." : "Approach the door that radiates heat.",() => { setGame(g => ({ ...g, scene: "blood-door" })); addLog([{ text: activeScenario.gateChoices[1] + ".", kind: "danger" }]); })}
@@ -177,7 +256,7 @@ export default function App() {
             {tab === "journal" ? <div className="log-list">{game.log.slice().reverse().map((entry, i) => <div className={`log-entry ${entry.kind ?? ""}`} key={i}><span className="log-marker">{entry.kind === "danger" ? "!" : entry.kind === "good" ? "✦" : "·"}</span><p>{entry.text}</p></div>)}</div> : <div className="inventory-list">{game.inventory.map((item, i) => <span key={item + i}>✦ {item}</span>)}<span>🧪 Healing potions ×{game.potions}</span><span>◈ Gold: {game.gold} gp</span></div>}
           </section>
         </section>
-        <aside className="rightbar"><div className="right-card"><div className="section-kicker">QUEST LOG</div><div className="quest-main"><span className="quest-icon">♜</span><div><strong>The Gate That Breathes</strong><small>Chapter I · Main quest</small></div></div><p>Discover why the ancient gate recognizes your bloodline.</p><div className="quest-status"><span className="status-dot"/> In progress</div><div className="side-divider"/><div className="section-kicker">OBJECTIVES</div><div className="objective"><span className={game.explored.length ? "objective-check done" : "objective-check"}/><span>Explore the entry chamber</span></div><div className="objective"><span className={game.explored.includes("Inspect the royal contract") ? "objective-check done" : "objective-check"}/><span>Investigate the royal contract</span></div><div className="objective"><span className={game.explored.length >= 2 ? "objective-check done" : "objective-check"}/><span>Find a way deeper</span></div><div className="side-divider"/><div className="section-kicker">CAMPAIGN DETAILS</div><div className="detail-row"><span>Difficulty</span><strong>Balanced</strong></div><div className="detail-row"><span>Party</span><strong>4 adventurers</strong></div><div className="detail-row"><span>Gold</span><strong>◈ {game.gold} gp</strong></div><div className="detail-row"><span>Session</span><strong>Auto-saved</strong></div></div><div className="rules-card"><span>✧</span><strong>Every choice matters.</strong><p>Skill checks use a d20 plus your relevant bonus. Your campaign saves automatically in this browser.</p></div><div className="footer-note">BUILT FOR ADVENTURERS<br/>PROTOTYPE v0.1.0</div></aside>
+        <aside className="rightbar"><div className="right-card"><div className="section-kicker">QUEST LOG</div><div className="quest-main"><span className="quest-icon">♜</span><div><strong>The Gate That Breathes</strong><small>Chapter I · Main quest</small></div></div><p>Discover why the ancient gate recognizes your bloodline.</p><div className="quest-status"><span className="status-dot"/> In progress</div><div className="side-divider"/><div className="section-kicker">OBJECTIVES</div><div className="objective"><span className={game.explored.length ? "objective-check done" : "objective-check"}/><span>Explore the entry chamber</span></div><div className="objective"><span className={game.explored.includes("Inspect the royal contract") ? "objective-check done" : "objective-check"}/><span>Investigate the royal contract</span></div><div className="objective"><span className={game.explored.length >= 2 ? "objective-check done" : "objective-check"}/><span>Find a way deeper</span></div><div className="side-divider"/><div className="section-kicker">CAMPAIGN DETAILS</div><div className="detail-row"><span>Difficulty</span><strong>{game.hero.difficulty}</strong></div><div className="detail-row"><span>Hero</span><strong>{game.hero.name}</strong></div><div className="detail-row"><span>Party</span><strong>4 adventurers</strong></div><div className="detail-row"><span>Gold</span><strong>◈ {game.gold} gp</strong></div><div className="detail-row"><span>Session</span><strong>Auto-saved</strong></div></div><div className="rules-card"><span>✧</span><strong>Every choice matters.</strong><p>Skill checks use a d20 plus your relevant bonus. Your campaign saves automatically in this browser.</p></div><div className="footer-note">BUILT FOR ADVENTURERS<br/>PROTOTYPE v0.1.0</div></aside>
       </main>
     </div>
   );
