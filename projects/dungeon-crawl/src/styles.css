@@ -63,3 +63,7 @@ button,input,select{font-size:inherit}
 .log-entry p{font-size:13px}.inventory-list span{font-size:12px}.right-card>p,.rules-card p{font-size:13px}.objective,.detail-row{font-size:12px}
 @media(max-width:760px){.creator-identity,.creator-layout{grid-template-columns:1fr}.creator-preview-column{grid-row:1}.avatar-stage{min-height:330px}.hero-art-large{height:245px}.creator-options{gap:14px}.difficulty-options{grid-template-columns:1fr}.character-modal{padding:22px 16px}.creator-identity{gap:13px}.creator-actions{flex-direction:column}}
 @media(min-width:761px) and (max-width:950px){.creator-layout{grid-template-columns:minmax(220px,.9fr) minmax(300px,1.1fr);gap:15px}.creator-modal{padding:22px}.avatar-stage{min-height:340px}.hero-art-large{height:265px}}
+
+/* Keep supporting copy readable across the entire interface */
+small{font-size:max(12px,.85em)}
+.prototype-label,.level-pill,.quest-status,.detail-row,.objective,.chapter-label,.choices-heading,.footer-note,.art-title>span,.scene-badge,.quest-main small,.rules-card p,.party-note{font-size:max(11px,.8em)}
