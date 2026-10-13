@@ -5,8 +5,8 @@ A dark-fantasy, browser-based RPG prototype starring Eleni, the Lost Heir. Built
 ## Current features
 
 - Main menu with load-saved-game and new-game choices
-- Character creator with name, male/female gender, five classes, four ancestries, four backgrounds, and three difficulty settings
-- Class-specific starting HP, attributes, weapons, armor, and inventory
+- Redesigned character creator with live full-body vector avatars for all 40 gender/class/ancestry combinations (20 female and 20 male), five classes, four ancestries, four backgrounds, and a separate difficulty-selection dialog
+- Class-specific characteristics, ancestry attribute bonuses, a readable starting-stat sheet, origin stories, weapons, armor, and inventory
 - Custom hero character sheet, HP, attributes, XP, gold, and equipment
 - Three selectable campaign scenarios: The Lost Heir, The Plague Below, and The Dragon's Hoard
 - A New Game scenario picker with distinct opening narration, location choices, and scenario-specific encounter flavor
@@ -58,7 +58,7 @@ For the multiplayer milestone, add a Node.js server with Socket.IO and a Postgre
 
 ## Start a different scenario
 
-At launch, choose **Load saved game** to continue the last adventure stored in this browser, or **Start a new game** to choose a campaign and create a hero. Character setup includes name, gender (female or male), class, ancestry, background, and difficulty. Starting a new adventure replaces the current single save in this browser. The three current scenarios share core exploration/combat mechanics, with distinct openings, first choices, and scenario-specific location and enemy narration.
+At launch, choose **Load saved game** to continue the last adventure stored in this browser, or **Start a new game** to choose a campaign and create a hero. Character setup includes name, gender (female or male), class, ancestry, and background. The live avatar and starting-stat sheet update with the selected class and ancestry; difficulty is selected in a separate confirmation dialog. Starting a new adventure replaces the current single save in this browser. The three current scenarios share core exploration/combat mechanics, with distinct openings, first choices, and scenario-specific location and enemy narration.
 
 ## Current limitations
 
