@@ -191,7 +191,7 @@ export default function App() {
       <div className="start-menu">
         <div className="section-kicker">YOUR ADVENTURE AWAITS</div>
         <button className="start-primary" disabled={!hasSavedGame} onClick={loadSavedGame}><span>↻</span><div><strong>Load saved game</strong><small>{hasSavedGame ? "Continue where your last adventure ended" : "No saved adventure found in this browser"}</small></div><b>→</b></button>
-        <button className="start-primary" onClick={() => { setHeroDraft(defaultHero); setShowScenarioPicker(true); }}><span>✦</span><div><strong>Start a new game</strong><small>Choose a campaign and create your hero</small></div><b>→</b></button>
+        <button className="start-primary" onClick={() => { setHeroDraft(defaultHero); setShowStartScreen(false); setShowScenarioPicker(true); }}><span>✦</span><div><strong>Start a new game</strong><small>Choose a campaign and create your hero</small></div><b>→</b></button>
         <p className="start-footnote">Saved games are stored in this browser on this device.</p>
       </div>
       <div className="start-worlds"><span>THE LOST HEIR</span><i>✦</i><span>THE PLAGUE BELOW</span><i>✦</i><span>THE DRAGON'S HOARD</span></div>
