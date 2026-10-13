@@ -83,16 +83,23 @@ function heroOriginStory(hero: Hero): string {
   return `${ancestry.story} ${heroClass.story} ${backgroundProfiles[hero.background]}`;
 }
 function HeroAvatar({ hero, large = false }: { hero: Hero; large?: boolean }) {
-  const [portraitFailed, setPortraitFailed] = useState(false);
-  const portraitByClass: Partial<Record<HeroClass, string>> = {
-    Warrior: "/images/characters/warrior-female-human-full.webp",
-    Rogue: "/images/characters/rogue-female-human.webp",
-    Mage: "/images/characters/mage-female-human.webp",
-    Ranger: "/images/characters/ranger-female-human.webp",
-    Paladin: "/images/characters/paladin-female-human.webp",
+  const portraitKey: `${HeroClass}:${HeroGender}:${HeroAncestry}` = `${hero.className}:${hero.gender}:${hero.ancestry}`;
+  const [failedPortraits, setFailedPortraits] = useState<Record<string, string[]>>({});
+  const portraits: Partial<Record<`${HeroClass}:${HeroGender}:${HeroAncestry}`, string[]>> = {
+    "Warrior:female:Human": ["/images/characters/warrior-female-human-full.webp", "/images/characters/warrior-female-human.webp"],
+    "Warrior:male:Human": ["/images/characters/warrior-male-human-full.webp"],
+    "Mage:female:Human": ["/images/characters/mage-female-human-full.webp", "/images/characters/mage-female-human.webp"],
+    "Mage:male:Human": ["/images/characters/mage-male-human-full.webp"],
+    "Rogue:female:Human": ["/images/characters/rogue-female-human-full.webp", "/images/characters/rogue-female-human.webp"],
+    "Rogue:male:Human": ["/images/characters/rogue-male-human-full.webp"],
+    "Ranger:female:Human": ["/images/characters/ranger-female-human-full.webp", "/images/characters/ranger-female-human.webp"],
+    "Ranger:male:Human": ["/images/characters/ranger-male-human-full.webp"],
+    "Paladin:female:Human": ["/images/characters/paladin-female-human-full.webp", "/images/characters/paladin-female-human.webp"],
+    "Paladin:male:Human": ["/images/characters/paladin-male-human-full.webp"],
   };
-  const portrait = hero.gender === "female" && hero.ancestry === "Human" ? portraitByClass[hero.className] : undefined;
-  useEffect(() => { setPortraitFailed(false); }, [portrait]);
+  const portraitCandidates = portraits[portraitKey] ?? [];
+  const failedForHero = failedPortraits[portraitKey] ?? [];
+  const portrait = portraitCandidates.find(candidate => !failedForHero.includes(candidate));
   const armor: Record<HeroClass, string> = { Warrior: "#9b7651", Ranger: "#55705a", Mage: "#645b91", Rogue: "#54545b", Paladin: "#b49a5d" };
   const skin: Record<HeroAncestry, string> = { Human: "#c99069", Elf: "#e0b58e", Dwarf: "#b97b56", "Half-Orc": "#8d9b69" };
   const hair: Record<HeroGender, string> = { female: "#3c2925", male: "#30231f" };
@@ -101,12 +108,16 @@ function HeroAvatar({ hero, large = false }: { hero: Hero; large?: boolean }) {
   const isOrc = hero.ancestry === "Half-Orc";
   const cape = hero.className === "Mage" ? "#37325c" : hero.className === "Paladin" ? "#6b2926" : hero.className === "Ranger" ? "#293e31" : "#332b27";
   const weapon = hero.className === "Mage" ? "staff" : hero.className === "Ranger" ? "bow" : hero.className === "Rogue" ? "dagger" : "sword";
-  if (portrait && !portraitFailed) {
+  if (portrait) {
     return <img
+      key={`${portraitKey}:${portrait}`}
       className={large ? "hero-portrait hero-portrait-large" : "hero-portrait"}
       src={portrait}
       alt={`${hero.gender} ${hero.ancestry} ${hero.className}`}
-      onError={() => setPortraitFailed(true)}
+      onError={() => setFailedPortraits(current => {
+        const failed = current[portraitKey] ?? [];
+        return failed.includes(portrait) ? current : { ...current, [portraitKey]: [...failed, portrait] };
+      })}
     />;
   }
   return <svg className={large ? "hero-art hero-art-large" : "hero-art"} viewBox="0 0 220 360" role="img" aria-label={`${hero.gender} ${hero.ancestry} ${hero.className} full-body avatar`}>
