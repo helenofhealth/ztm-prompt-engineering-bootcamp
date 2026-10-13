@@ -5,6 +5,8 @@ A dark-fantasy, browser-based RPG prototype starring Eleni, the Lost Heir. Built
 ## Current features
 
 - Eleni's Warrior character sheet, HP, attributes, XP, gold, and equipment
+- Three selectable campaign scenarios: The Lost Heir, The Plague Below, and The Dragon's Hoard
+- A New Game scenario picker with distinct opening narration, location choices, and scenario-specific encounter flavor
 - Three simulated AI companions: Brom Ironvein, Lyra Thornwhisper, and Mira Voss
 - Branching exploration through the royal contract, blood-sealed door, whispering well, and forgotten armory
 - d20 skill checks, turn-based combat, healing potions, enemy HP, and rewards
@@ -50,6 +52,10 @@ For the multiplayer milestone, add a Node.js server with Socket.IO and a Postgre
 - Socket.IO room broadcasts and reconnect recovery
 - PostgreSQL campaign, character, event, and save records
 - Optional AI Game Master for narration and NPC dialogue, isolated from deterministic rules
+
+## Start a different scenario
+
+Choose **New game** in the header, then select a campaign. Starting a new scenario resets the current run in this browser and begins a fresh campaign. The three current scenarios share the core exploration/combat mechanics, with distinct openings, first choices, and scenario-specific location and enemy narration.
 
 ## Current limitations
 
