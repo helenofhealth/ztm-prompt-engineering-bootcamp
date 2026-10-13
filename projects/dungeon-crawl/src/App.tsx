@@ -71,7 +71,6 @@ export default function App() {
   const activeScenario = scenarios[game.scenarioId];
   const startScenario = (id: ScenarioId) => {
     setPendingScenarioId(id);
-    setHeroDraft(game.hero ?? defaultHero);
     setShowScenarioPicker(false);
     setShowCharacterCreator(true);
   };
@@ -178,7 +177,7 @@ export default function App() {
     }
   }, [game.scene, game.round, game.scenarioId, activeScenario]);
 
-  const reset = () => { setShowStartScreen(false); setShowScenarioPicker(true); };
+  const reset = () => { setHeroDraft(defaultHero); setShowStartScreen(false); setShowScenarioPicker(true); };
   const alive = game.hp > 0;
   const heroClassInfo = classDetails[game.hero.className];
 
