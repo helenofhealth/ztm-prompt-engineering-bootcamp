@@ -92,6 +92,7 @@ function HeroAvatar({ hero, large = false }: { hero: Hero; large?: boolean }) {
     Paladin: "/images/characters/paladin-female-human.webp",
   };
   const portrait = hero.gender === "female" && hero.ancestry === "Human" ? portraitByClass[hero.className] : undefined;
+  useEffect(() => { setPortraitFailed(false); }, [portrait]);
   const armor: Record<HeroClass, string> = { Warrior: "#9b7651", Ranger: "#55705a", Mage: "#645b91", Rogue: "#54545b", Paladin: "#b49a5d" };
   const skin: Record<HeroAncestry, string> = { Human: "#c99069", Elf: "#e0b58e", Dwarf: "#b97b56", "Half-Orc": "#8d9b69" };
   const hair: Record<HeroGender, string> = { female: "#3c2925", male: "#30231f" };
