@@ -1,28 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { addLostHeirSilverKey, claimRewardOnce, getHeroAbilityScores, hasRewardClaim, resolveCheck, resolvePotionHealing, rollDie, rollEnemyDamage, rollPlayerAttack, validateSaveData } from "./game/rules";
+import { getSceneNarrative, scenarioTaglines, scenarioTitles } from "./game/narrative";
+import type { Hero, HeroAncestry, HeroBackground, HeroClass, HeroGender, LogEntry, PartyMember, SaveState, ScenarioId, Scene } from "./game/types";
+import MultiplayerLobby from "./multiplayer/MultiplayerLobby";
 
-type Scene = "gate" | "blood-door" | "well" | "armory" | "contract" | "combat" | "victory";
-type ScenarioId = "lost-heir" | "plague-below" | "dragon-hoard";
-type Scenario = { id: ScenarioId; title: string; tagline: string; intro: string; quote: string; gateChoices: [string, string, string, string] };
-type LogEntry = { text: string; kind?: "roll" | "danger" | "good" };
-type PartyMember = { name: string; role: string; hp: number; maxHp: number; detail: string; icon: string };
-
-type HeroGender = "female" | "male";
-type HeroClass = "Warrior" | "Ranger" | "Mage" | "Rogue" | "Paladin";
-type HeroAncestry = "Human" | "Elf" | "Dwarf" | "Half-Orc";
-type HeroBackground = "Noble" | "Outlander" | "Scholar" | "Mercenary";
-type Hero = { name: string; gender: HeroGender; className: HeroClass; ancestry: HeroAncestry; background: HeroBackground; difficulty: "Story" | "Balanced" | "Hard" };
-type SaveState = {
-  scenarioId: ScenarioId; scene: Scene; hp: number; maxHp: number; gold: number; xp: number; potions: number;
-  inventory: string[]; log: LogEntry[]; explored: string[]; enemyHp: number; enemyMaxHp: number;
-  round: number; lastRoll: number | null; hero: Hero;
-};
-const defaultHero: Hero = { name: "Eleni", gender: "female", className: "Warrior", ancestry: "Human", background: "Noble", difficulty: "Balanced" };
-const classDetails: Record<HeroClass, { hp: number; stats: [string, string, string][]; weapon: string; armor: string; attackBonus: number; damage: string }> = {
-  Warrior: { hp: 24, stats: [["STR","16","+3"],["DEX","12","+1"],["CON","15","+2"],["INT","10","+0"],["WIS","13","+1"],["CHA","14","+2"]], weapon: "Ancestral Longsword", armor: "Reinforced Armor", attackBonus: 5, damage: "1d8 + 3 damage" },
-  Ranger: { hp: 21, stats: [["STR","12","+1"],["DEX","16","+3"],["CON","13","+1"],["INT","12","+1"],["WIS","15","+2"],["CHA","10","+0"]], weapon: "Recurve Longbow", armor: "Trail-worn Leather", attackBonus: 5, damage: "1d8 + 3 damage" },
-  Mage: { hp: 17, stats: [["STR","8","−1"],["DEX","12","+1"],["CON","12","+1"],["INT","16","+3"],["WIS","14","+2"],["CHA","13","+1"]], weapon: "Runed Staff", armor: "Warded Robes", attackBonus: 5, damage: "1d8 + 3 arcane damage" },
-  Rogue: { hp: 20, stats: [["STR","10","+0"],["DEX","17","+3"],["CON","13","+1"],["INT","14","+2"],["WIS","12","+1"],["CHA","14","+2"]], weapon: "Twin Daggers", armor: "Shadow Leather", attackBonus: 6, damage: "1d8 + 3 damage" },
-  Paladin: { hp: 26, stats: [["STR","16","+3"],["DEX","10","+0"],["CON","16","+3"],["INT","10","+0"],["WIS","13","+1"],["CHA","15","+2"]], weapon: "Oathbound Blade", armor: "Sanctified Plate", attackBonus: 5, damage: "1d8 + 3 radiant damage" },
+type Scenario = { id: ScenarioId; title: string; tagline: string; gateChoices: [string, string, string, string] };
+const REWARD_MARKER_PREFIX = "__reward_claimed__:";
+const rewardMarker = (scenarioId: ScenarioId, rewardId: string) => `${REWARD_MARKER_PREFIX}${scenarioId}:${rewardId}`;
+const visibleExploredChoices = (explored: string[]) => explored.filter(value => !value.startsWith(REWARD_MARKER_PREFIX));
+const defaultHero: Hero = { name: "Adventurer", gender: "female", className: "Warrior", ancestry: "Human", background: "Noble", difficulty: "Balanced" };
+const classDetails: Record<HeroClass, { hp: number; weapon: string; armor: string; attackBonus: number; damage: string }> = {
+  Warrior: { hp: 24, weapon: "Ancestral Longsword", armor: "Reinforced Armor", attackBonus: 5, damage: "1d8 + 3 damage" },
+  Ranger: { hp: 21, weapon: "Recurve Longbow", armor: "Trail-worn Leather", attackBonus: 5, damage: "1d8 + 3 damage" },
+  Mage: { hp: 17, weapon: "Runed Staff", armor: "Warded Robes", attackBonus: 5, damage: "1d8 + 3 arcane damage" },
+  Rogue: { hp: 20, weapon: "Twin Daggers", armor: "Shadow Leather", attackBonus: 6, damage: "1d8 + 3 damage" },
+  Paladin: { hp: 26, weapon: "Oathbound Blade", armor: "Sanctified Plate", attackBonus: 5, damage: "1d8 + 3 radiant damage" },
 };
 
 const initialParty: PartyMember[] = [
@@ -32,21 +24,85 @@ const initialParty: PartyMember[] = [
 ];
 const starterInventory = ["Ancestral longsword", "Reinforced armor", "Shield", "5 torches", "50 ft rope", "Flint & steel", "3 days of rations", "Signet of the First King"];
 const scenarios: Record<ScenarioId, Scenario> = {
-  "lost-heir": { id: "lost-heir", title: "The Lost Heir", tagline: "What was buried was never forgotten.", intro: "Rain hammers the ruined fortress above you. The black-iron gate opens at the touch of your signet. Beyond it, ankle-deep black water surrounds four faceless statues and a bronze pedestal.", quote: "“The heir may claim the throne, but the throne claims the heir.”", gateChoices: ["Inspect the royal contract", "Approach the blood-sealed door", "Investigate the whispering well", "Search the forgotten armory"] },
-  "plague-below": { id: "plague-below", title: "The Plague Below", tagline: "Some things should stay buried.", intro: "You descend into a quarantined mining city where green spores drift through the air. The evacuation bells have stopped, but something beneath the streets is still ringing them. Your party's masks are already frosting over.", quote: "“If you can hear the bells, the infection can hear you.”", gateChoices: ["Inspect the quarantine ledger", "Open the sealed infirmary", "Investigate the spore well", "Search the abandoned supply vault"] },
-  "dragon-hoard": { id: "dragon-hoard", title: "The Dragon's Hoard", tagline: "Every treasure has a price.", intro: "A split mountain opens into a cavern of black glass and molten gold. Coins rain from the ceiling like sparks. Somewhere beyond the bridge, a sleeping dragon breathes—and every exhale makes the stone beneath your boots tremble.", quote: "“Take one coin, and the mountain takes one name.”", gateChoices: ["Read the runic bargain", "Approach the obsidian door", "Investigate the wishing pool", "Search the fallen treasure vault"] }
+  "lost-heir": { id: "lost-heir", title: scenarioTitles["lost-heir"].solo, tagline: scenarioTaglines["lost-heir"], gateChoices: ["Inspect the royal contract", "Approach the blood-sealed door", "Investigate the whispering well", "Search the forgotten armory"] },
+  "plague-below": { id: "plague-below", title: scenarioTitles["plague-below"].solo, tagline: scenarioTaglines["plague-below"], gateChoices: ["Inspect the quarantine ledger", "Open the sealed infirmary", "Investigate the spore well", "Search the abandoned supply vault"] },
+  "dragon-hoard": { id: "dragon-hoard", title: scenarioTitles["dragon-hoard"].solo, tagline: scenarioTaglines["dragon-hoard"], gateChoices: ["Read the runic bargain", "Approach the obsidian door", "Investigate the wishing pool", "Search the fallen treasure vault"] }
+};
+const scenarioCopy: Record<ScenarioId, {
+  questTitle: string; questDescription: string; objectives: [string, string, string]; hubName: string; victoryTease: string;
+  doorHeading: string; doorPrompt: string; doorAction: string; doorDescription: string; doorCheck: string; doorForceAction: string; doorForceDescription: string; doorReturn: string;
+  contractHeading: string; contractPrompt: string; contractAction: string; contractDescription: string; contractCheck: string; contractSuccess: string; contractFailure: string; contractReturn: string; contractReturnDescription: string;
+  wellHeading: string; wellPrompt: string; wellAskSuccess: string; wellAskFailure: string; wellLookAction: string; wellLookDescription: string; wellLookSuccess: string; wellLookFailure: string; wellReturn: string;
+  armoryHeading: string; armoryPrompt: string; armorySearchAction: string; armorySearchDescription: string; armorySearchSuccess: string; armorySearchFailure: string; armoryTracksSuccess: string; armoryTracksFailure: string; armoryReturn: string;
+  enemyName: string; enemyDescriptor: string; enemyArrival: string; enemyDefeat: string;
+}> = {
+  "lost-heir": {
+    questTitle: "The Gate That Breathes", questDescription: "Discover why the ancient gate recognizes your bloodline.", objectives: ["Explore the entry chamber", "Investigate the royal contract", "Find a way deeper"], hubName: "the central chamber", victoryTease: "The next gate is stirring.",
+    doorHeading: "THE BLOOD-SEALED DOOR", doorPrompt: "MAKE A CHOICE", doorAction: "Touch the seal with your signet", doorDescription: "Use your lineage to open the door.", doorCheck: "Royal bloodline", doorForceAction: "Break the seal by force", doorForceDescription: "Test your strength against ancient magic.", doorReturn: "Retreat to the chamber",
+    contractHeading: "THE ROYAL CONTRACT", contractPrompt: "YOUR BLOODLINE", contractAction: "Place the signet in the pedestal", contractDescription: "Test whether the relic recognizes its heir.", contractCheck: "Heir's Instinct", contractSuccess: "The signet unlocks the hidden cache. You find a silver key. +15 XP.", contractFailure: "The pedestal rejects the signet.", contractReturn: "Return to the chamber", contractReturnDescription: "Keep exploring before risking the contract.",
+    wellHeading: "THE WHISPERING WELL", wellPrompt: "SEEK THE TRUTH", wellAskSuccess: "Mira identifies a memory echo, not proof of betrayal. +10 XP.", wellAskFailure: "The magic resists Mira's spell. The warning remains unexplained.", wellLookAction: "Look into the water", wellLookDescription: "Face the voice yourself.", wellLookSuccess: "A forgotten royal memory surfaces. +10 XP.", wellLookFailure: "A cold hand brushes your mind. You lose 2 HP.", wellReturn: "Return to the central chamber",
+    armoryHeading: "THE FORGOTTEN ARMORY", armoryPrompt: "SEARCH THE RUINS", armorySearchAction: "Search behind the fallen statue", armorySearchDescription: "Recover whatever the golden light is guarding.", armorySearchSuccess: "You recover a ward charm and 10 gold. +15 XP.", armorySearchFailure: "The statue shifts, and something stirs in the darkness.", armoryTracksSuccess: "The tracks belong to a heavy armored construct. +5 XP.", armoryTracksFailure: "The tracks disappear beneath a sheet of dust.", armoryReturn: "Return to the central chamber",
+    enemyName: "Crownbound Sentinel", enemyDescriptor: "Royal construct", enemyArrival: "A Crownbound Sentinel tears free from the wall!", enemyDefeat: "The sentinel collapses into a storm of black ash. The chamber falls silent.",
+  },
+  "plague-below": {
+    questTitle: "The Bells Below", questDescription: "Trace the outbreak and discover what is still ringing beneath the quarantine.", objectives: ["Explore the mine entrance", "Inspect the quarantine ledger", "Find the source of the bells"], hubName: "the mine entrance", victoryTease: "The quarantine bells ring below.",
+    doorHeading: "THE SEALED INFIRMARY", doorPrompt: "QUARANTINE SEAL", doorAction: "Examine the quarantine seal", doorDescription: "Look for a way through without releasing what is inside.", doorCheck: "Quarantine protocol", doorForceAction: "Break the infirmary seal", doorForceDescription: "Force the sealed door before whatever is inside breaks through.", doorReturn: "Return to the mine entrance",
+    contractHeading: "THE QUARANTINE LEDGER", contractPrompt: "CONTAINMENT RECORD", contractAction: "Study the final ledger entry", contractDescription: "Look for a clue to the quarantine's failure.", contractCheck: "Containment records", contractSuccess: "You decipher the final entry in the quarantine ledger. +15 XP.", contractFailure: "The final entry is obscured by damage.", contractReturn: "Return to the mine entrance", contractReturnDescription: "Keep exploring before risking the ledger.",
+    wellHeading: "THE SPORE WELL", wellPrompt: "TRACE THE INFECTION", wellAskSuccess: "Mira identifies the well's echo as an old quarantine warning. +10 XP.", wellAskFailure: "The well's magic resists Mira's spell. Its warning remains unexplained.", wellLookAction: "Study the spores below", wellLookDescription: "Peer into the shaft and trace the infection's source.", wellLookSuccess: "A memory of the quarantine surfaces in the water. +10 XP.", wellLookFailure: "A cold presence brushes your mind. You lose 2 HP.", wellReturn: "Return to the mine entrance",
+    armoryHeading: "THE SUPPLY VAULT", armoryPrompt: "SEARCH THE VAULT", armorySearchAction: "Search the sealed supply cabinet", armorySearchDescription: "Recover what the damaged cabinet is hiding.", armorySearchSuccess: "You recover a ward charm and 10 gold. +15 XP.", armorySearchFailure: "The cabinet gives way, and something stirs among the supplies.", armoryTracksSuccess: "The tracks lead to a heavy quarantine warden. +5 XP.", armoryTracksFailure: "The tracks vanish beneath a drift of spores.", armoryReturn: "Return to the mine entrance",
+    enemyName: "Spore-Twisted Warden", enemyDescriptor: "Infected quarantine warden", enemyArrival: "A Spore-Twisted Warden staggers out of the mist!", enemyDefeat: "The infected warden collapses in a cloud of pale spores.",
+  },
+  "dragon-hoard": {
+    questTitle: "The Name in the Hoard", questDescription: "Uncover the terms of the dragon's bargain before it claims your name.", objectives: ["Explore the cavern", "Read the runic bargain", "Discover the guardian's passage"], hubName: "the cavern", victoryTease: "Something vast stirs above the hoard.",
+    doorHeading: "THE OBSIDIAN DOOR", doorPrompt: "THE DRAGON'S OFFER", doorAction: "Trace the obsidian runes", doorDescription: "Read the offer etched into the door before answering.", doorCheck: "Runic bargain", doorForceAction: "Force the obsidian door", doorForceDescription: "Test your strength against the dragon-glass seal.", doorReturn: "Return to the cavern",
+    contractHeading: "THE RUNIC BARGAIN", contractPrompt: "PRICE OF THE HOARD", contractAction: "Read the terms etched in dragon glass", contractDescription: "Test your understanding of the bargain's price.", contractCheck: "Bargain's Terms", contractSuccess: "The runes reveal the price demanded by the hoard. +15 XP.", contractFailure: "The runes resist your interpretation.", contractReturn: "Return to the cavern", contractReturnDescription: "Keep exploring before risking the bargain.",
+    wellHeading: "THE WISHING POOL", wellPrompt: "SEEK THE PRICE", wellAskSuccess: "Mira identifies the pool's magic as a bargain that demands a memory. +10 XP.", wellAskFailure: "The pool's enchantment resists Mira's spell. Its price remains unclear.", wellLookAction: "Look into the pool", wellLookDescription: "Face the reflection that moves before you do.", wellLookSuccess: "A memory of an ancient bargain surfaces in the water. +10 XP.", wellLookFailure: "A cold presence brushes your mind. You lose 2 HP.", wellReturn: "Return to the cavern",
+    armoryHeading: "THE FALLEN TREASURE VAULT", armoryPrompt: "SEARCH THE TREASURE", armorySearchAction: "Search behind the fallen coffer", armorySearchDescription: "Recover whatever the golden light is guarding.", armorySearchSuccess: "You recover a ward charm and 10 gold. +15 XP.", armorySearchFailure: "The coffer shifts, and something stirs among the coins.", armoryTracksSuccess: "The tracks belong to a dragon-forged guardian. +5 XP.", armoryTracksFailure: "The tracks disappear beneath scattered coins.", armoryReturn: "Return to the cavern",
+    enemyName: "Hoardbound Guardian", enemyDescriptor: "Dragon-forged guardian", enemyArrival: "A Hoardbound Guardian unfolds from a pile of coins!", enemyDefeat: "The guardian breaks apart into black glass and gold.",
+  },
+};
+const migrateLegacyRewardClaims = (state: SaveState): SaveState => {
+  const explored = new Set(state.explored);
+  const copy = scenarioCopy[state.scenarioId];
+  const successfulCheck = (label: string) => state.log.some(entry => entry.text.startsWith(`${label}: d20 (`) && entry.text.includes(" — SUCCESS"));
+  const markers: string[] = [];
+  const claimIf = (condition: boolean, rewardId: string) => {
+    const marker = rewardMarker(state.scenarioId, rewardId);
+    if (condition && !explored.has(marker)) markers.push(marker);
+  };
+
+  claimIf(explored.has(scenarios[state.scenarioId].gateChoices[0]) && successfulCheck(state.scenarioId === "lost-heir" ? "Royal history" : state.scenarioId === "plague-below" ? "Medical investigation" : "Arcane lore"), "gate-research");
+  claimIf(explored.has(copy.contractAction) && successfulCheck(copy.contractCheck), "contract-insight");
+  const signetSucceeded = explored.has(copy.doorAction) && successfulCheck(copy.doorCheck);
+  const forceSucceeded = explored.has(copy.doorForceAction) && successfulCheck("Strength");
+  claimIf(signetSucceeded || forceSucceeded, "sealed-door-key");
+  claimIf(signetSucceeded, "sealed-door-insight");
+  claimIf(explored.has("Ask Mira to examine the magic") && successfulCheck("Arcana"), "well-arcana");
+  claimIf(explored.has(copy.wellLookAction) && successfulCheck("Wisdom"), "well-observation");
+  claimIf(explored.has(copy.armorySearchAction) && successfulCheck("Investigation"), "vault-cache");
+  claimIf(explored.has("Take a torch and study the tracks") && successfulCheck("Perception"), "tracks");
+
+  return markers.length ? { ...state, explored: [...state.explored, ...markers] } : state;
 };
 const initialState: SaveState = {
   scenarioId: "lost-heir", scene: "gate", hp: 24, maxHp: 24, gold: 25, xp: 0, potions: 2, hero: defaultHero,
   inventory: starterInventory, log: [
-    { text: "Campaign started: Eleni, the Lost Heir. Your signet has awakened.", kind: "good" },
+    { text: "Campaign started: Adventurer, the Lost Heir. Your signet has awakened.", kind: "good" },
     { text: "Brom, Lyra, and Mira join your expedition." },
     { text: "The gate whispers: “The rightful heir has come home.”", kind: "danger" },
   ], explored: [], enemyHp: 22, enemyMaxHp: 22, round: 1, lastRoll: null,
 };
 
-const roll = (sides: number) => Math.floor(Math.random() * sides) + 1;
-
+const SAVE_VALIDATION_CONFIG = {
+  fallback: initialState,
+  scenarioIds: Object.keys(scenarios) as ScenarioId[],
+  sceneIds: ["gate", "blood-door", "well", "armory", "contract", "combat", "victory"] as Scene[],
+  classBaseHp: Object.fromEntries(Object.entries(classDetails).map(([name, details]) => [name, details.hp])) as Record<HeroClass, number>,
+  ancestries: ["Human", "Elf", "Dwarf", "Half-Orc"] as HeroAncestry[],
+  backgrounds: ["Noble", "Outlander", "Scholar", "Mercenary"] as HeroBackground[],
+  rewardMarkerPrefix: REWARD_MARKER_PREFIX,
+  rewardIds: ["gate-research", "contract-insight", "sealed-door-key", "sealed-door-insight", "well-arcana", "well-observation", "vault-cache", "tracks"],
+} as const;
 
 const ancestryDetails: Record<HeroAncestry, { trait: string; description: string; bonuses: Partial<Record<"STR" | "DEX" | "CON" | "INT" | "WIS" | "CHA", number>>; story: string }> = {
   Human: { trait: "Versatile", description: "Adaptable, determined, and quick to earn trust.", bonuses: { STR: 1, DEX: 1, CON: 1, INT: 1, WIS: 1, CHA: 1 }, story: "Raised among shifting borders, you learned that courage matters more than bloodline." },
@@ -71,8 +127,9 @@ const ancestryOrder: HeroAncestry[] = ["Human", "Elf", "Dwarf", "Half-Orc"];
 const classOrder: HeroClass[] = ["Warrior", "Ranger", "Mage", "Rogue", "Paladin"];
 const statOrder = ["STR", "DEX", "CON", "INT", "WIS", "CHA"] as const;
 function getHeroStats(hero: Hero): [string, string, string][] {
-  return classDetails[hero.className].stats.map(([name, score]) => {
-    const value = Number(score) + (ancestryDetails[hero.ancestry].bonuses[name as keyof typeof ancestryDetails.Human.bonuses] ?? 0);
+  const scores = getHeroAbilityScores(hero);
+  return statOrder.map(name => {
+    const value = scores[name];
     const modifier = Math.floor((value - 10) / 2);
     return [name, String(value), modifier >= 0 ? `+${modifier}` : String(modifier)];
   });
@@ -187,16 +244,19 @@ export default function App() {
   const [game, setGame] = useState<SaveState>(initialState);
   const [party, setParty] = useState(initialParty);
   const [showStartScreen, setShowStartScreen] = useState(true);
+  const [showMultiplayerLobby, setShowMultiplayerLobby] = useState(false);
   const [showScenarioPicker, setShowScenarioPicker] = useState(false);
   const [showCharacterCreator, setShowCharacterCreator] = useState(false);
   const [showDifficultyModal, setShowDifficultyModal] = useState(false);
   const [hasSavedGame, setHasSavedGame] = useState(() => {
     try { return Boolean(localStorage.getItem("dungeon-crawl-save-v1")); } catch { return false; }
   });
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [pendingScenarioId, setPendingScenarioId] = useState<ScenarioId>("lost-heir");
   const [heroDraft, setHeroDraft] = useState<Hero>(defaultHero);
   const [tab, setTab] = useState<"journal" | "inventory">("journal");
+  const pendingRewardClaims = useRef(new Set<string>());
 
   useEffect(() => {
     if (gameStarted) {
@@ -206,6 +266,15 @@ export default function App() {
   }, [game, gameStarted]);
 
   const activeScenario = scenarios[game.scenarioId];
+  const copy = scenarioCopy[game.scenarioId];
+  const exploredChoices = visibleExploredChoices(game.explored);
+  const claimExplorationReward = (rewardId: string) => {
+    const claim = claimRewardOnce(game.explored, pendingRewardClaims.current, game.scenarioId, rewardId, REWARD_MARKER_PREFIX);
+    if (!claim.claimed) return false;
+    pendingRewardClaims.current = claim.pendingClaims;
+    setGame(g => g.explored.includes(claim.marker) ? g : { ...g, explored: [...g.explored, claim.marker] });
+    return true;
+  };
   const startScenario = (id: ScenarioId) => {
     setPendingScenarioId(id);
     setShowScenarioPicker(false);
@@ -213,6 +282,8 @@ export default function App() {
   };
 
   const beginAdventure = () => {
+    pendingRewardClaims.current.clear();
+    setLoadError(null);
     const id = pendingScenarioId;
     const selected = scenarios[id];
     const hero = { ...heroDraft, name: heroDraft.name.trim() || "Nameless Adventurer" };
@@ -235,7 +306,7 @@ export default function App() {
         { text: "New campaign started: " + selected.title + ".", kind: "good" },
         { text: hero.name + " begins this adventure as a " + hero.ancestry + " " + hero.className + " (" + hero.gender + ").", kind: "good" },
         { text: id === "lost-heir" ? "Your signet has awakened. Brom, Lyra, and Mira join your expedition." : id === "plague-below" ? "Brom, Lyra, and Mira join your expedition. Keep your masks sealed." : "Brom, Lyra, and Mira join your expedition. The dragon has not stirred—yet." },
-        { text: selected.quote, kind: "danger" }
+        { text: getSceneNarrative(id, "gate", "solo").quote, kind: "danger" }
       ],
       explored: [], enemyHp: 22, enemyMaxHp: 22, round: 1, lastRoll: null
     };
@@ -246,22 +317,31 @@ export default function App() {
     try {
       const raw = localStorage.getItem("dungeon-crawl-save-v1");
       if (!raw) { setHasSavedGame(false); return; }
-      const parsed = JSON.parse(raw) as Partial<SaveState>;
-      const loaded = { ...initialState, ...parsed, hero: { ...defaultHero, ...(parsed.hero ?? {}) } };
-      if (!scenarios[loaded.scenarioId]) loaded.scenarioId = "lost-heir";
+      const parsed: unknown = JSON.parse(raw);
+      const validated = validateSaveData(parsed, SAVE_VALIDATION_CONFIG);
+      if (!validated) {
+        setLoadError("Saved campaign data is invalid or incompatible. Your existing save was left untouched.");
+        return;
+      }
+      let loaded = validated;
+      loaded = migrateLegacyRewardClaims(loaded);
+      if (loaded.scenarioId === "lost-heir" && hasRewardClaim(loaded.explored, "lost-heir", "contract-insight", REWARD_MARKER_PREFIX) && !loaded.inventory.includes("Silver key")) {
+        loaded = { ...loaded, inventory: addLostHeirSilverKey(loaded.scenarioId, loaded.inventory, true) };
+      }
+      pendingRewardClaims.current.clear();
+      setLoadError(null);
       setGame(loaded); setHeroDraft(loaded.hero); setParty(initialParty); setShowStartScreen(false); setGameStarted(true);
     } catch {
-      setHasSavedGame(false);
+      setLoadError("Saved campaign data could not be read. Your existing save was left untouched.");
     }
   };
 
   const addLog = (entries: LogEntry[]) => setGame(g => ({ ...g, log: [...g.log, ...entries].slice(-40) }));
   const check = (label: string, bonus = 0, dc = 12) => {
-    const die = roll(20); const total = die + bonus;
-    const success = die === 20 || (die !== 1 && total >= dc);
-    addLog([{ text: `${label}: d20 (${die}) ${bonus >= 0 ? "+" : ""}${bonus} = ${total} vs DC ${dc} — ${success ? "SUCCESS" : "FAILURE"}`, kind: success ? "good" : "danger" }]);
-    setGame(g => ({ ...g, lastRoll: die }));
-    return success;
+    const result = resolveCheck(rollDie(20), bonus, dc);
+    addLog([{ text: `${label}: d20 (${result.die}) ${bonus >= 0 ? "+" : ""}${bonus} = ${result.total} vs DC ${dc} — ${result.success ? "SUCCESS" : "FAILURE"}`, kind: result.success ? "good" : "danger" }]);
+    setGame(g => ({ ...g, lastRoll: result.die }));
+    return result.success;
   };
 
   const updateParty = (damage: number) => setParty(p => p.map((member, i) =>
@@ -270,31 +350,34 @@ export default function App() {
 
   const startCombat = () => {
     setGame(g => ({ ...g, scene: "combat", enemyHp: g.enemyMaxHp, round: 1 }));
-    addLog([{ text: "COMBAT: A Crownbound Sentinel tears free from the wall!", kind: "danger" }]);
+    addLog([{ text: `COMBAT: ${copy.enemyArrival}`, kind: "danger" }]);
   };
 
   const attack = () => {
     const bonus = classDetails[game.hero.className].attackBonus;
-    const die = roll(20); const hit = die + bonus >= 12 || die === 20;
-    const damage = hit ? roll(8) + 3 : 0;
-    const afterHit = Math.max(0, game.enemyHp - damage);
-    const entries: LogEntry[] = [{ text: `${game.hero.name} attacks: d20 (${die}) + ${bonus}. ${hit ? `Hit for ${damage} damage!` : "Miss!"}`, kind: hit ? "good" : "danger" }];
+    const result = rollPlayerAttack(bonus);
+    const afterHit = Math.max(0, game.enemyHp - result.damage);
+    const entries: LogEntry[] = [{ text: `${game.hero.name} attacks: d20 (${result.die}) + ${bonus}. ${result.hit ? `Hit for ${result.damage} damage!` : "Miss!"}`, kind: result.hit ? "good" : "danger" }];
     if (afterHit <= 0) {
-      entries.push({ text: "The sentinel collapses into a storm of black ash. The chamber falls silent.", kind: "good" });
+      entries.push({ text: copy.enemyDefeat, kind: "good" });
       setGame(g => ({ ...g, scene: "victory", enemyHp: 0, xp: g.xp + 50, gold: g.gold + 15, log: [...g.log, ...entries] }));
       return;
     }
-    const enemyDamage = game.hero.difficulty === "Story" ? roll(4) : game.hero.difficulty === "Hard" ? roll(8) + 2 : roll(6) + 1;
-    const newHp = Math.max(0, game.hp - enemyDamage);
-    entries.push({ text: `The sentinel retaliates for ${enemyDamage} damage.`, kind: "danger" });
+    const enemyDamage = rollEnemyDamage(game.hero.difficulty);
+    const newHp = Math.max(0, game.hp - enemyDamage.total);
+    entries.push({ text: `The ${copy.enemyName} retaliates for ${enemyDamage.total} damage.`, kind: "danger" });
     if (newHp === 0) entries.push({ text: `${game.hero.name} falls unconscious. Use a healing potion or retreat.`, kind: "danger" });
     setGame(g => ({ ...g, enemyHp: afterHit, hp: newHp, round: g.round + 1, log: [...g.log, ...entries] }));
   };
 
   const usePotion = () => {
     if (game.potions <= 0 || game.hp === game.maxHp) return;
-    const healing = roll(4) + roll(4) + 2;
-    setGame(g => ({ ...g, hp: Math.min(g.maxHp, g.hp + healing), potions: g.potions - 1, log: [...g.log, { text: `You drink a healing potion and recover ${healing} HP.`, kind: "good" }] }));
+    const dieOne = rollDie(4);
+    const dieTwo = rollDie(4);
+    setGame(g => {
+      const healing = resolvePotionHealing(g.hp, g.maxHp, dieOne, dieTwo);
+      return { ...g, hp: healing.hp, potions: g.potions - 1, log: [...g.log, { text: `Healing potion: rolled ${healing.rolled} HP; restored ${healing.restored} HP.`, kind: "good" }] };
+    });
   };
 
   const choose = (scene: Scene, title: string, description: string, action: () => void) => (
@@ -305,11 +388,7 @@ export default function App() {
 
   const sceneContent = useMemo(() => {
     switch (game.scene) {
-      case "gate": return { eyebrow: "CHAPTER I · " + activeScenario.title.toUpperCase(), title: activeScenario.title, art: "gate", body: activeScenario.intro, quote: activeScenario.quote };
-      case "blood-door": return game.scenarioId === "plague-below" ? { eyebrow: "LOCATION · THE SEALED INFIRMARY", title: "Quarantine Is Not Enough", art: "blood", body: "A red quarantine seal covers the infirmary door. Something pounds from inside. A voice calls for help, then dissolves into a wet, inhuman clicking.", quote: "Mira whispers: “If the seal breaks, do not breathe the air.”" } : game.scenarioId === "dragon-hoard" ? { eyebrow: "LOCATION · THE OBSIDIAN DOOR", title: "A Bargain in the Dark", art: "blood", body: "An obsidian door glows with molten seams. A voice offers treasure in exchange for one small memory.", quote: "Brom grips his hammer: “Dragons don't bargain unless they already have the upper hand.”" } : { eyebrow: "LOCATION · THE BLOOD-SEALED DOOR", title: "Someone Knows Your Name", art: "blood", body: "A crimson seal throbs on an iron door. Something pounds against the other side. A voice cries: “Your Majesty! Please, you must let me out!”", quote: "Brom whispers: “I've seen this crest on a tomb door. From the inside.”" };
-      case "well": return game.scenarioId === "plague-below" ? { eyebrow: "LOCATION · THE SPORE WELL", title: "The Infection Listens", art: "well", body: "A shaft descends into blue-green spores. The cloud rises and falls like a sleeping lung. From below, a voice repeats your last words a heartbeat after you speak.", quote: "Lyra finds boot prints leading into the shaft—but none returning." } : game.scenarioId === "dragon-hoard" ? { eyebrow: "LOCATION · THE WISHING POOL", title: "Gold Beneath the Water", art: "well", body: "A still pool reflects a sky that cannot exist underground. Gold coins hover beneath the surface. Your reflection smiles a moment before you do.", quote: "Mira warns: “Wish-magic always collects its debt.”" } : { eyebrow: "LOCATION · THE WHISPERING WELL", title: "A Voice from Below", art: "well", body: "Cold blue light shimmers over a circular well. Your own voice repeats: “Do not trust Brom.”", quote: "Brom refuses to meet your eyes. Mira says the magic is old enough to have a memory." };
-      case "armory": return game.scenarioId === "plague-below" ? { eyebrow: "LOCATION · THE SUPPLY VAULT", title: "The Last Clean Supplies", art: "armory", body: "Shelves of sealed medicine and ration tins line the vault. One cabinet has been clawed open from the inside. Something scrapes behind the emergency supplies.", quote: "Brom raises his shield: “Take what we need. We don't linger.”" } : game.scenarioId === "dragon-hoard" ? { eyebrow: "LOCATION · THE FALLEN TREASURE VAULT", title: "A Mountain of Temptation", art: "armory", body: "Coins and broken crowns glitter beneath a fallen stone arch. A golden light pulses inside a cracked coffer, while claw marks score the walls.", quote: "Lyra spots tracks far too large to belong to a wolf." } : { eyebrow: "LOCATION · THE FORGOTTEN ARMORY", title: "Steel Remembers", art: "armory", body: "Weapons hang in rows beneath a collapsed arch. A golden light flickers behind a fallen statue, and somewhere in the dark, a blade is being sharpened.", quote: "Lyra spots fresh tracks. Whatever is here has been waiting." };
-      case "contract": return game.scenarioId === "plague-below" ? { eyebrow: "DISCOVERY · THE QUARANTINE LEDGER", title: "Patient Zero", art: "contract", body: "The ledger records a quarantine that began twenty years ago. Every name is crossed out except one: the name of the city's founder.", quote: "“Containment failed at 03:17. Do not open the lower doors.”" } : game.scenarioId === "dragon-hoard" ? { eyebrow: "DISCOVERY · THE RUNIC BARGAIN", title: "The Hoard's Contract", art: "contract", body: "A runic bargain is etched into dragon glass. Its terms shimmer: treasure for memory, power for a name.", quote: "“All debts are remembered beneath the mountain.”" } : { eyebrow: "DISCOVERY · THE ROYAL CONTRACT", title: "The Throne's Price", art: "contract", body: "The inscription is not a warning but a contract. Your signet fits a hollow in the pedestal. Ancient letters rearrange themselves around your hand.", quote: "“Blood grants entry. Memory grants passage. A name grants the crown.”" };
+      case "gate": case "blood-door": case "well": case "armory": case "contract": return getSceneNarrative(game.scenarioId, game.scene, "solo");
       case "combat": return game.scenarioId === "plague-below" ? { eyebrow: "ENCOUNTER · ROUND " + game.round, title: "Spore-Twisted Warden", art: "combat", body: "A quarantine warden staggers out of the mist, armor split by pale fungal growth. Spores spill from its visor as it raises a rusted blade.", quote: "“INFECTION DETECTED. PURGE INITIATED.”" } : game.scenarioId === "dragon-hoard" ? { eyebrow: "ENCOUNTER · ROUND " + game.round, title: "Hoardbound Guardian", art: "combat", body: "A dragon-forged guardian unfolds from a pile of coins. Molten light shines through its scales of black glass.", quote: "“THIEF. YOUR NAME WILL JOIN THE HOARD.”" } : { eyebrow: "ENCOUNTER · ROUND " + game.round, title: "Crownbound Sentinel", art: "combat", body: "A suit of royal armor pulls itself upright. Green fire burns inside its empty visor. Its sword points at your heart.", quote: "“UNRECOGNIZED HEIR. SUBMIT FOR JUDGMENT.”" };
       case "victory": return game.scenarioId === "plague-below" ? { eyebrow: "ENCOUNTER COMPLETE", title: "The Warden Falls", art: "victory", body: "The infected warden collapses. A sealed sample case and a brass access key remain in the debris.", quote: "Somewhere below, the quarantine bells begin to ring again." } : game.scenarioId === "dragon-hoard" ? { eyebrow: "ENCOUNTER COMPLETE", title: "The Guardian Shatters", art: "victory", body: "The guardian breaks apart into black glass and gold. A dragon-scale key gleams among the coins.", quote: "Far above, something vast shifts in its sleep." } : { eyebrow: "ENCOUNTER COMPLETE", title: "The Sentinel Falls", art: "victory", body: "The ancient armor collapses. Beneath the ash, a silver key gleams beside a fragment of a royal banner. Your signet cools for the first time since you entered.", quote: "Somewhere deeper in the dungeon, a second gate begins to open." };
     }
@@ -329,6 +408,9 @@ export default function App() {
         <div className="section-kicker">YOUR ADVENTURE AWAITS</div>
         <button className="start-primary" disabled={!hasSavedGame} onClick={loadSavedGame}><span>↻</span><div><strong>Load saved game</strong><small>{hasSavedGame ? "Continue where your last adventure ended" : "No saved adventure found in this browser"}</small></div><b>→</b></button>
         <button className="start-primary" onClick={() => { setHeroDraft(defaultHero); setShowStartScreen(false); setShowScenarioPicker(true); }}><span>✦</span><div><strong>Start a new game</strong><small>Choose a campaign and create your hero</small></div><b>→</b></button>
+        <button className="start-primary" onClick={() => setShowMultiplayerLobby(true)}><span>♧</span><div><strong>Play online</strong><small>Create or join a temporary shared campaign</small></div><b>→</b></button>
+        {showMultiplayerLobby && <MultiplayerLobby onClose={() => setShowMultiplayerLobby(false)} />}
+        {loadError && <p className="start-footnote" role="alert">{loadError}</p>}
         <p className="start-footnote">Saved games are stored in this browser on this device.</p>
       </div>
       <div className="start-worlds"><span>THE LOST HEIR</span><i>✦</i><span>THE PLAGUE BELOW</span><i>✦</i><span>THE DRAGON'S HOARD</span></div>
@@ -381,39 +463,39 @@ export default function App() {
         <section className="main-column">
           <div className={`scene-art ${sceneContent.art}`}><div className="art-grain"/><div className="scene-badge"><span/> {sceneContent.eyebrow}</div><div className="art-title"><span>THE CHRONICLES OF</span><h1>{activeScenario.title.toUpperCase()}</h1><p>{activeScenario.tagline}</p></div><div className="art-rune">ᚷ</div></div>
           <article className="story-panel"><div className="chapter-label"><span>✦</span> {sceneContent.eyebrow}</div><h2>{sceneContent.title}</h2><p>{sceneContent.body}</p><blockquote>{sceneContent.quote}</blockquote>
-            {game.scene === "combat" ? <div className="combat-panel"><div className="enemy-heading"><span>☠</span><div><strong>{game.scenarioId === "plague-below" ? "Spore-Twisted Warden" : game.scenarioId === "dragon-hoard" ? "Hoardbound Guardian" : "Crownbound Sentinel"}</strong><small>Undead construct · AC 12</small></div><b>{game.enemyHp} / {game.enemyMaxHp} HP</b></div><div className="meter enemy-meter"><span style={{ width: `${game.enemyHp / game.enemyMaxHp * 100}%` }}/></div><div className="combat-actions"><button className="primary-button" onClick={attack} disabled={!alive || game.enemyHp <= 0}>⚔ Attack with {heroClassInfo.weapon.toLowerCase()}</button><button className="secondary-button" onClick={usePotion} disabled={game.potions <= 0 || game.hp === game.maxHp}>🧪 Drink potion ({game.potions})</button></div>{!alive && <button className="primary-button" onClick={() => { setGame(g => ({ ...g, hp: 12, scene: "gate", enemyHp: g.enemyMaxHp, log: [...g.log, { text: "The party drags you to safety. You recover with 12 HP; the encounter resets.", kind: "good" }] })); }}>Recover and retreat</button>}</div> : null}
+            {game.scene === "combat" ? <div className="combat-panel"><div className="enemy-heading"><span>☠</span><div><strong>{copy.enemyName}</strong><small>{copy.enemyDescriptor} · AC 12</small></div><b>{game.enemyHp} / {game.enemyMaxHp} HP</b></div><div className="meter enemy-meter"><span style={{ width: `${game.enemyHp / game.enemyMaxHp * 100}%` }}/></div><div className="combat-actions"><button className="primary-button" onClick={attack} disabled={!alive || game.enemyHp <= 0}>⚔ Attack with {heroClassInfo.weapon.toLowerCase()}</button><button className="secondary-button" onClick={usePotion} disabled={game.potions <= 0 || game.hp === game.maxHp}>🧪 Drink potion ({game.potions})</button></div>{!alive && <button className="primary-button" onClick={() => { setGame(g => ({ ...g, hp: 12, scene: "gate", enemyHp: g.enemyMaxHp, log: [...g.log, { text: "The party drags you to safety. You recover with 12 HP; the encounter resets.", kind: "good" }] })); }}>Recover and retreat</button>}</div> : null}
             {game.scene === "gate" && <div className="choices"><div className="choices-heading">WHAT WILL YOU DO? <span>CHOOSE YOUR PATH</span></div>
-              {choose("gate",activeScenario.gateChoices[0],game.scenarioId === "lost-heir" ? "Study the pedestal and faceless statues before committing." : game.scenarioId === "plague-below" ? "Study the quarantine records for clues to the outbreak." : "Study the runes before making a bargain.",() => { const success = check(game.scenarioId === "lost-heir" ? "Royal history" : game.scenarioId === "plague-below" ? "Medical investigation" : "Arcane lore", 1, 12); setGame(g => ({ ...g, scene: "contract", xp: g.xp + (success ? 10 : 0) })); })}
+              {choose("gate",activeScenario.gateChoices[0],game.scenarioId === "lost-heir" ? "Study the pedestal and faceless statues before committing." : game.scenarioId === "plague-below" ? "Study the quarantine records for clues to the outbreak." : "Study the runes before making a bargain.",() => { const success = check(game.scenarioId === "lost-heir" ? "Royal history" : game.scenarioId === "plague-below" ? "Medical investigation" : "Arcane lore", 1, 12); const reward = success && claimExplorationReward("gate-research"); setGame(g => ({ ...g, scene: "contract", xp: g.xp + (reward ? 10 : 0) })); })}
               {choose("gate",activeScenario.gateChoices[1],game.scenarioId === "lost-heir" ? "Answer the voice calling you Majesty." : game.scenarioId === "plague-below" ? "Investigate the sealed room where the first cases vanished." : "Approach the door that radiates heat.",() => { setGame(g => ({ ...g, scene: "blood-door" })); addLog([{ text: activeScenario.gateChoices[1] + ".", kind: "danger" }]); })}
               {choose("gate",activeScenario.gateChoices[2],game.scenarioId === "lost-heir" ? "Find the source of the warning about Brom." : game.scenarioId === "plague-below" ? "Trace the source of the strange spores." : "Look into the pool that reflects another sky.",() => { setGame(g => ({ ...g, scene: "well" })); addLog([{ text: activeScenario.gateChoices[2] + ".", kind: "danger" }]); })}
               {choose("gate",activeScenario.gateChoices[3],game.scenarioId === "lost-heir" ? "Look for supplies and clues among the abandoned weapons." : game.scenarioId === "plague-below" ? "Search for clean supplies and protective gear." : "Search for treasure without waking the dragon.",() => { setGame(g => ({ ...g, scene: "armory" })); addLog([{ text: activeScenario.gateChoices[3] + "." }]); })}
             </div>}
-            {game.scene === "contract" && <div className="choices"><div className="choices-heading">THE CONTRACT <span>YOUR BLOODLINE</span></div>
-              {choose("contract","Place the signet in the pedestal","Test whether the relic recognizes its heir.",() => { const success = check("Heir's Instinct", 3, 13); setGame(g => ({ ...g, scene: success ? "victory" : "combat", xp: g.xp + (success ? 15 : 0), log: [...g.log, { text: success ? "The signet unlocks a hidden cache: +15 XP and a silver key." : "The pedestal rejects the signet. A sentinel awakens!", kind: success ? "good" : "danger" }] })); if (!success) startCombat(); })}
-              {choose("contract","Return to the chamber","Keep exploring before risking the contract.",() => setGame(g => ({ ...g, scene: "gate" })))}
+            {game.scene === "contract" && <div className="choices"><div className="choices-heading">{copy.contractHeading} <span>{copy.contractPrompt}</span></div>
+              {choose("contract",copy.contractAction,copy.contractDescription,() => { const success = check(copy.contractCheck, 3, 13); const reward = success && claimExplorationReward("contract-insight"); setGame(g => ({ ...g, scene: success ? "victory" : "combat", xp: g.xp + (reward ? 15 : 0), inventory: reward ? addLostHeirSilverKey(game.scenarioId, g.inventory, true) : g.inventory, log: [...g.log, { text: !success ? copy.contractFailure : reward ? copy.contractSuccess : "You understand the discovery, but have already gained its experience.", kind: success ? "good" : "danger" }] })); if (!success) startCombat(); })}
+              {choose("contract",copy.contractReturn,copy.contractReturnDescription,() => setGame(g => ({ ...g, scene: "gate" })))}
             </div>}
-            {game.scene === "blood-door" && <div className="choices"><div className="choices-heading">THE SEALED DOOR <span>MAKE A CHOICE</span></div>
-              {choose("blood-door","Touch the seal with your signet","Use your lineage to open the door.",() => { const success = check("Royal bloodline", 3, 13); if (success) { setGame(g => ({ ...g, scene: "armory", xp: g.xp + 15, inventory: [...g.inventory, "Blood-forged key"], log: [...g.log, { text: "The seal breaks. You find a blood-forged key behind the door. +15 XP.", kind: "good" }] })); } else startCombat(); })}
-              {choose("blood-door","Break the seal by force","Test your strength against ancient magic.",() => { const success = check("Strength", 3, 14); if (success) { setGame(g => ({ ...g, scene: "armory", hp: Math.max(1, g.hp - 3), inventory: [...g.inventory, "Blood-forged key"], log: [...g.log, { text: "The seal shatters. The recoil costs you 3 HP, but you claim a key.", kind: "good" }] })); } else startCombat(); })}
-              {choose("blood-door","Retreat to the chamber","Keep the mystery unresolved for now.",() => setGame(g => ({ ...g, scene: "gate" })))}
+            {game.scene === "blood-door" && <div className="choices"><div className="choices-heading">{copy.doorHeading} <span>{copy.doorPrompt}</span></div>
+              {choose("blood-door",copy.doorAction,copy.doorDescription,() => { const success = check(copy.doorCheck, 3, 13); if (success) { const keyReward = claimExplorationReward("sealed-door-key"); const xpReward = claimExplorationReward("sealed-door-insight"); setGame(g => ({ ...g, scene: "armory", xp: g.xp + (xpReward ? 15 : 0), inventory: keyReward ? [...g.inventory, "Blood-forged key"] : g.inventory, log: [...g.log, { text: keyReward ? `The seal breaks. You claim a key.${xpReward ? " +15 XP." : ""}` : "The seal opens, but you have already claimed what lay beyond.", kind: "good" }] })); } else startCombat(); })}
+              {choose("blood-door",copy.doorForceAction,copy.doorForceDescription,() => { const success = check("Strength", 3, 14); if (success) { const keyReward = claimExplorationReward("sealed-door-key"); setGame(g => ({ ...g, scene: "armory", hp: Math.max(1, g.hp - 3), inventory: keyReward ? [...g.inventory, "Blood-forged key"] : g.inventory, log: [...g.log, { text: keyReward ? "The seal shatters. The recoil costs you 3 HP, but you claim a key." : "The seal shatters again. The recoil costs you 3 HP; the key was already claimed.", kind: "good" }] })); } else startCombat(); })}
+              {choose("blood-door",copy.doorReturn,"Leave the sealed entrance for now.",() => setGame(g => ({ ...g, scene: "gate" })))}
             </div>}
-            {game.scene === "well" && <div className="choices"><div className="choices-heading">THE WHISPERING WELL <span>SEEK THE TRUTH</span></div>
-              {choose("well","Ask Mira to examine the magic","Let the mage test the well's enchantment.",() => { const success = check("Arcana", 2, 12); setGame(g => ({ ...g, scene: "gate", xp: g.xp + (success ? 10 : 0), log: [...g.log, { text: success ? "Mira identifies a memory echo, not proof of betrayal. +10 XP." : "The magic resists Mira's spell. The warning remains unexplained.", kind: success ? "good" : "danger" }] })); })}
-              {choose("well","Look into the water","Face the voice yourself.",() => { const success = check("Wisdom", 1, 13); setGame(g => ({ ...g, scene: success ? "contract" : "gate", hp: Math.max(1, g.hp - (success ? 0 : 2)), xp: g.xp + (success ? 10 : 0), log: [...g.log, { text: success ? "A forgotten royal memory surfaces. +10 XP." : "A cold hand brushes your mind. You lose 2 HP.", kind: success ? "good" : "danger" }] })); })}
-              {choose("well","Return to the central chamber","Keep your distance from the well.",() => setGame(g => ({ ...g, scene: "gate" })))}
+            {game.scene === "well" && <div className="choices"><div className="choices-heading">{copy.wellHeading} <span>{copy.wellPrompt}</span></div>
+              {choose("well","Ask Mira to examine the magic","Let Mira study the water's enchantment.",() => { const success = check("Arcana", 2, 12); const reward = success && claimExplorationReward("well-arcana"); setGame(g => ({ ...g, scene: "gate", xp: g.xp + (reward ? 10 : 0), log: [...g.log, { text: !success ? copy.wellAskFailure : reward ? copy.wellAskSuccess : "Mira's findings are clear, but you have already gained their experience.", kind: success ? "good" : "danger" }] })); })}
+              {choose("well",copy.wellLookAction,copy.wellLookDescription,() => { const success = check("Wisdom", 1, 13); const reward = success && claimExplorationReward("well-observation"); setGame(g => ({ ...g, scene: success ? "contract" : "gate", hp: Math.max(1, g.hp - (success ? 0 : 2)), xp: g.xp + (reward ? 10 : 0), log: [...g.log, { text: !success ? copy.wellLookFailure : reward ? copy.wellLookSuccess : "The vision returns, but you have already gained its experience.", kind: success ? "good" : "danger" }] })); })}
+              {choose("well",copy.wellReturn,"Leave the water undisturbed for now.",() => setGame(g => ({ ...g, scene: "gate" })))}
             </div>}
-            {game.scene === "armory" && <div className="choices"><div className="choices-heading">THE FORGOTTEN ARMORY <span>SEARCH THE RUINS</span></div>
-              {choose("armory","Search behind the fallen statue","Recover whatever the golden light is guarding.",() => { const success = check("Investigation", 1, 12); setGame(g => ({ ...g, scene: success ? "victory" : "combat", xp: g.xp + (success ? 15 : 0), gold: g.gold + (success ? 10 : 0), inventory: success ? [...g.inventory, "Royal ward charm"] : g.inventory, log: [...g.log, { text: success ? "You find a Royal Ward Charm and 10 gold. +15 XP." : "The statue collapses. A Crownbound Sentinel rises from the debris.", kind: success ? "good" : "danger" }] })); if (!success) startCombat(); })}
-              {choose("armory","Take a torch and study the tracks","Look for clues before touching anything.",() => { const success = check("Perception", 1, 11); setGame(g => ({ ...g, scene: "gate", xp: g.xp + (success ? 5 : 0), log: [...g.log, { text: success ? "The tracks belong to a heavy armored construct. +5 XP." : "The tracks disappear beneath a sheet of dust.", kind: success ? "good" : "danger" }] })); })}
-              {choose("armory","Return to the central chamber","Leave the weapons undisturbed.",() => setGame(g => ({ ...g, scene: "gate" })))}
+            {game.scene === "armory" && <div className="choices"><div className="choices-heading">{copy.armoryHeading} <span>{copy.armoryPrompt}</span></div>
+              {choose("armory",copy.armorySearchAction,copy.armorySearchDescription,() => { const success = check("Investigation", 1, 12); const reward = success && claimExplorationReward("vault-cache"); setGame(g => ({ ...g, scene: success ? "victory" : "combat", xp: g.xp + (reward ? 15 : 0), gold: g.gold + (reward ? 10 : 0), inventory: reward ? [...g.inventory, "Royal ward charm"] : g.inventory, log: [...g.log, { text: !success ? copy.armorySearchFailure : reward ? copy.armorySearchSuccess : "The cache is empty of anything new; its reward has already been claimed.", kind: success ? "good" : "danger" }] })); if (!success) startCombat(); })}
+              {choose("armory","Take a torch and study the tracks","Look for clues before disturbing anything.",() => { const success = check("Perception", 1, 11); const reward = success && claimExplorationReward("tracks"); setGame(g => ({ ...g, scene: "gate", xp: g.xp + (reward ? 5 : 0), log: [...g.log, { text: !success ? copy.armoryTracksFailure : reward ? copy.armoryTracksSuccess : "You recognize the tracks, but have already gained this insight.", kind: success ? "good" : "danger" }] })); })}
+              {choose("armory",copy.armoryReturn,"Leave the supplies undisturbed for now.",() => setGame(g => ({ ...g, scene: "gate" })))}
             </div>}
-            {game.scene === "victory" && <div className="victory-reward"><div className="reward-icon">♛</div><div><strong>Reward secured</strong><p>+50 XP · +15 gold · The next gate is stirring.</p></div><button className="primary-button" onClick={() => { setGame(g => ({ ...g, scene: "gate", enemyHp: g.enemyMaxHp, log: [...g.log, { text: "You return to the central chamber, stronger and carrying new clues.", kind: "good" }] })); }}>Continue expedition →</button></div>}
+            {game.scene === "victory" && <div className="victory-reward"><div className="reward-icon">♛</div><div><strong>Reward secured</strong><p>+50 XP · +15 gold · {copy.victoryTease}</p></div><button className="primary-button" onClick={() => { setGame(g => ({ ...g, scene: "gate", enemyHp: g.enemyMaxHp, log: [...g.log, { text: `You return to ${copy.hubName}, stronger and carrying new clues.`, kind: "good" }] })); }}>Continue expedition →</button></div>}
           </article>
           <section className="journal-panel"><div className="journal-head"><div><span className="section-kicker">CAMPAIGN RECORD</span><h3>Adventure log</h3></div><div className="tabs"><button className={tab === "journal" ? "active" : ""} onClick={() => setTab("journal")}>Journal</button><button className={tab === "inventory" ? "active" : ""} onClick={() => setTab("inventory")}>Inventory</button></div></div>
             {tab === "journal" ? <div className="log-list">{game.log.slice().reverse().map((entry, i) => <div className={`log-entry ${entry.kind ?? ""}`} key={i}><span className="log-marker">{entry.kind === "danger" ? "!" : entry.kind === "good" ? "✦" : "·"}</span><p>{entry.text}</p></div>)}</div> : <div className="inventory-list">{game.inventory.map((item, i) => <span key={item + i}>✦ {item}</span>)}<span>🧪 Healing potions ×{game.potions}</span><span>◈ Gold: {game.gold} gp</span></div>}
           </section>
         </section>
-        <aside className="rightbar"><div className="right-card"><div className="section-kicker">QUEST LOG</div><div className="quest-main"><span className="quest-icon">♜</span><div><strong>The Gate That Breathes</strong><small>Chapter I · Main quest</small></div></div><p>Discover why the ancient gate recognizes your bloodline.</p><div className="quest-status"><span className="status-dot"/> In progress</div><div className="side-divider"/><div className="section-kicker">OBJECTIVES</div><div className="objective"><span className={game.explored.length ? "objective-check done" : "objective-check"}/><span>Explore the entry chamber</span></div><div className="objective"><span className={game.explored.includes("Inspect the royal contract") ? "objective-check done" : "objective-check"}/><span>Investigate the royal contract</span></div><div className="objective"><span className={game.explored.length >= 2 ? "objective-check done" : "objective-check"}/><span>Find a way deeper</span></div><div className="side-divider"/><div className="section-kicker">CAMPAIGN DETAILS</div><div className="detail-row"><span>Difficulty</span><strong>{game.hero.difficulty}</strong></div><div className="detail-row"><span>Hero</span><strong>{game.hero.name}</strong></div><div className="detail-row"><span>Party</span><strong>4 adventurers</strong></div><div className="detail-row"><span>Gold</span><strong>◈ {game.gold} gp</strong></div><div className="detail-row"><span>Session</span><strong>Auto-saved</strong></div></div><div className="rules-card"><span>✧</span><strong>Every choice matters.</strong><p>Skill checks use a d20 plus your relevant bonus. Your campaign saves automatically in this browser.</p></div><div className="footer-note">BUILT FOR ADVENTURERS<br/>PROTOTYPE v0.1.0</div></aside>
+        <aside className="rightbar"><div className="right-card"><div className="section-kicker">QUEST LOG</div><div className="quest-main"><span className="quest-icon">♜</span><div><strong>{copy.questTitle}</strong><small>Chapter I · Main quest</small></div></div><p>{copy.questDescription}</p><div className="quest-status"><span className="status-dot"/> In progress</div><div className="side-divider"/><div className="section-kicker">OBJECTIVES</div><div className="objective"><span className={exploredChoices.length ? "objective-check done" : "objective-check"}/><span>{copy.objectives[0]}</span></div><div className="objective"><span className={game.explored.includes(activeScenario.gateChoices[0]) ? "objective-check done" : "objective-check"}/><span>{copy.objectives[1]}</span></div><div className="objective"><span className={exploredChoices.length >= 2 ? "objective-check done" : "objective-check"}/><span>{copy.objectives[2]}</span></div><div className="side-divider"/><div className="section-kicker">CAMPAIGN DETAILS</div><div className="detail-row"><span>Difficulty</span><strong>{game.hero.difficulty}</strong></div><div className="detail-row"><span>Hero</span><strong>{game.hero.name}</strong></div><div className="detail-row"><span>Party</span><strong>4 adventurers</strong></div><div className="detail-row"><span>Gold</span><strong>◈ {game.gold} gp</strong></div><div className="detail-row"><span>Session</span><strong>Auto-saved</strong></div></div><div className="rules-card"><span>✧</span><strong>Every choice matters.</strong><p>Skill checks use a d20 plus your relevant bonus. Your campaign saves automatically in this browser.</p></div><div className="footer-note">BUILT FOR ADVENTURERS<br/>PROTOTYPE v0.1.0</div></aside>
       </main>
     </div>
   );
